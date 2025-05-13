@@ -1,3 +1,5 @@
+// src/comments/CommentModalManager.js
+
 /**
  * Manages the comment modal dialog for adding and displaying comments.
  */
@@ -14,6 +16,12 @@ export default class CommentModalManager {
         this.currentRow = null;
         this.commentType = null; // 'item', 'row', or 'category'
         this.tables = {};
+        this._keydownHandler = (e) => {
+            // Use an instance property so we can remove the listener if needed
+            if (e.key === 'Escape') {
+                this.hide();
+            }
+        };
         this.init();
     }
 
@@ -203,25 +211,23 @@ export default class CommentModalManager {
     /**
      * Initializes modal event listeners for buttons, keyboard, and modal background.
      */
-init() {
-    document.getElementById('saveComment').addEventListener('click', () => this.saveComment());
-    document.getElementById('cancelComment').addEventListener('click', () => this.handleCancel());
-    this.modal.addEventListener('click', (e) => {
-        if (e.target === this.modal) this.hide();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.modal.classList.contains('active')) {
-            this.hide();
-        }
-    });
-    this.input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            this.saveComment();
-        }
-    });
-}
-
+    init() {
+        // Save button click
+        document.getElementById('saveComment').addEventListener('click', () => this.saveComment());
+        // Cancel button click
+        document.getElementById('cancelComment').addEventListener('click', () => this.handleCancel());
+        // Click outside modal to close
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) this.hide();
+        });
+        // Escape key closes modal (using instance property for handler)
+        document.addEventListener('keydown', this._keydownHandler);
+        // Ctrl+Enter or Cmd+Enter saves comment
+        this.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                this.saveComment();
+            }
         });
     }
 }
