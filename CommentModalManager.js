@@ -203,25 +203,25 @@ export default class CommentModalManager {
     /**
      * Initializes modal event listeners for buttons, keyboard, and modal background.
      */
-    init() {
-        // Save button click
-        document.getElementById('saveComment').addEventListener('click', () => this.saveComment());
-        // Cancel button click
-        document.getElementById('cancelComment').addEventListener('click', () => this.handleCancel());
-        // Click outside modal to close
-        this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) this.hide();
-        });
-        // Escape key closes modal
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.modal.style.display === 'block') this.hide();
-        });
-        // Ctrl+Enter or Cmd+Enter saves comment
-        this.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                this.saveComment();
-            }
+init() {
+    document.getElementById('saveComment').addEventListener('click', () => this.saveComment());
+    document.getElementById('cancelComment').addEventListener('click', () => this.handleCancel());
+    this.modal.addEventListener('click', (e) => {
+        if (e.target === this.modal) this.hide();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.modal.classList.contains('active')) {
+            this.hide();
+        }
+    });
+    this.input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            this.saveComment();
+        }
+    });
+}
+
         });
     }
 }
