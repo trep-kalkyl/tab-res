@@ -194,16 +194,34 @@ export default class CommentModalManager {
     }
 
     /**
-     * Initializes modal event listeners.
+     * Handles cancel action (close modal).
+     */
+    handleCancel() {
+        this.hide();
+    }
+
+    /**
+     * Initializes modal event listeners for buttons, keyboard, and modal background.
      */
     init() {
-        const saveButton = document.getElementById('saveComment');
-        const cancelButton = document.getElementById('cancelComment');
-        if (saveButton) {
-            saveButton.onclick = () => this.saveComment();
-        }
-        if (cancelButton) {
-            cancelButton.onclick = () => this.hide();
-        }
+        // Save button click
+        document.getElementById('saveComment').addEventListener('click', () => this.saveComment());
+        // Cancel button click
+        document.getElementById('cancelComment').addEventListener('click', () => this.handleCancel());
+        // Click outside modal to close
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) this.hide();
+        });
+        // Escape key closes modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modal.style.display === 'block') this.hide();
+        });
+        // Ctrl+Enter or Cmd+Enter saves comment
+        this.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                this.saveComment();
+            }
+        });
     }
 }
