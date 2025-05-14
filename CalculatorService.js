@@ -1,23 +1,23 @@
 /**
  * CalculatorService.js
- * En modul för att hantera beräkningar i trep-kalkyl
+ * A module for handling calculations in trep-kalkyl.
  */
 
 export default class CalculatorService {
   /**
-   * Beräknar totaler för ett item baserat på dess uppgifter
-   * @param {Object} item - Item-objektet som ska beräknas
-   * @returns {Object} Det uppdaterade item-objektet
+   * Updates all totals for an item based on its tasks and quantity.
+   * @param {Object} item - The item object to update.
+   * @returns {Object} The updated item object.
    */
   static updateItemTotals(item) {
-    // Om item innehåller tasks, beräkna item-värdena baserat på dessa
+    // If the item has tasks, calculate item-level values based on those tasks
     if (item.tasks && item.tasks.length > 0) {
       const totals = this.calculateProjectTotals(item.tasks);
       item.item_work_task_duration = totals.item_work_task_duration;
       item.item_material_user_price = totals.item_material_user_price;
     }
     
-    // Beräkna totalerna baserat på kvantitet
+    // Calculate totals based on the item's quantity
     item.item_material_user_price_total = 
       item.item_quantity * item.item_material_user_price;
     item.item_work_task_duration_total = 
@@ -27,9 +27,9 @@ export default class CalculatorService {
   }
   
   /**
-   * Beräknar totalsummor för en lista av tasks
-   * @param {Array} tasks - Lista med task-objekt
-   * @returns {Object} Objekt med beräknade totaler
+   * Calculates total work duration and material price for a list of tasks.
+   * @param {Array} tasks - Array of task objects.
+   * @returns {Object} Object with calculated totals.
    */
   static calculateProjectTotals(tasks) {
     return {
@@ -45,15 +45,15 @@ export default class CalculatorService {
   }
   
   /**
-   * Beräknar totaler för en enskild task
-   * @param {Object} task - Task-objektet som ska beräknas
-   * @returns {Object} Det uppdaterade task-objektet
+   * Updates totals for a single task.
+   * @param {Object} task - The task object to update.
+   * @returns {Object} The updated task object.
    */
   static updateTaskTotals(task) {
-    // Beräkna arbetstid total
+    // Calculate total work duration for the task
     task.work_task_duration_total = task.work_task_duration * task.total_quantity;
     
-    // Beräkna materialpris total
+    // Calculate total material price for the task
     task.material_user_price_total = 
       task.total_quantity * task.material_amount * task.material_user_price;
     
@@ -61,14 +61,16 @@ export default class CalculatorService {
   }
   
   /**
-   * Beräknar kategoritotaler för meny-data
-   * @param {Array} data - Lista med item-objekt
-   * @returns {Array} Lista med kategori-summor
+   * Creates summary data for the menu table, aggregating totals per category.
+   * Adds empty categories from allCategories if not present in data.
+   * @param {Array} data - Array of item objects.
+   * @param {Set} allCategories - Set of all category names.
+   * @returns {Array} Array of category summary objects.
    */
   static createMenuData(data, allCategories) {
     const summary = {};
     
-    // Lägg först till befintliga kategorier från data
+    // First, aggregate totals for each category present in data
     data.forEach((item) => {
       if (!summary[item.item_category]) {
         summary[item.item_category] = {
@@ -84,7 +86,7 @@ export default class CalculatorService {
         item.item_work_task_duration_total;
     });
     
-    // Lägg till tomma kategorier som finns i allCategories men inte i data
+    // Add empty categories that exist in allCategories but not in data
     allCategories.forEach((category) => {
       if (!summary[category]) {
         summary[category] = {
@@ -100,10 +102,10 @@ export default class CalculatorService {
   }
   
   /**
-   * Beräknar totaler för en specifik kategori
-   * @param {Array} data - Lista med item-objekt
-   * @param {String} category - Kategorin att beräkna för
-   * @returns {Object} Objekt med kategori-totaler
+   * Calculates totals for a specific category.
+   * @param {Array} data - Array of item objects.
+   * @param {String} category - The category to calculate totals for.
+   * @returns {Object} Object with category totals.
    */
   static calculateCategoryTotals(data, category) {
     let categoryTotal = {
@@ -111,6 +113,7 @@ export default class CalculatorService {
       category_work_task_duration_total: 0,
     };
     
+    // Sum up totals for all items in the given category
     data.forEach((item) => {
       if (item.item_category === category) {
         categoryTotal.category_material_user_price_total +=
