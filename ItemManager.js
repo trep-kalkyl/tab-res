@@ -406,23 +406,28 @@ class ItemManager {
    * Deletes an item row from the data table and updates the menu.
    * @param {Tabulator.CellComponent} cell - The cell in the row to delete.
    */
-  deleteItem(cell) {
+deleteItem(cell) {
+  try {
+    // Spara data innan vi tar bort raden
     const row = cell.getRow();
     const rowData = row.getData();
     const category = rowData.item_category;
 
-    // Remove from the global data array
+    // Ta bort från den globala data-arrayen
     const index = this.data.findIndex((item) => item.id === rowData.id);
     if (index !== -1) {
       this.data.splice(index, 1);
     }
 
-    // Remove only this specific row
-    row.delete();
-
-    // Update only the affected category in the menu
+    // Uppdatera kategorin i menyn innan vi tar bort raden
     this.updateCategoryInMenu(category);
+    
+    // Ta bort raden sist, efter att all data har använts
+    row.delete();
+  } catch (error) {
+    console.error("Error in deleteItem:", error);
   }
+}
 
   /**
    * Adds a new category to the menu.
