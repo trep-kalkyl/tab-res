@@ -209,34 +209,34 @@ class ItemManager {
    * @param {Tabulator.RowComponent} row - The task row to delete.
    */
   deleteTaskRow(row) {
-    try {
-      // Spara data innan vi tar bort raden
-      let taskData = row.getData();
-      let parentTable = Tabulator.findTable("#data-table")[0];
-      let parentRow = parentTable.getRows().find((pRow) => {
-        let pData = pRow.getData();
-        return pData.tasks.some(
-          (task) => task.estimation_item_id === taskData.estimation_item_id
-        );
-      });
+  try {
+    // Spara data innan vi tar bort raden
+    let taskData = row.getData();
+    let parentTable = Tabulator.findTable("#data-table")[0];
+    let parentRow = parentTable.getRows().find((pRow) => {
+      let pData = pRow.getData();
+      return pData.tasks.some(
+        (task) => task.estimation_item_id === taskData.estimation_item_id
+      );
+    });
 
-      if (parentRow) {
-        let parentData = parentRow.getData();
-        // Keep the same array reference, but filter out the deleted task
-        parentData.tasks = parentData.tasks.filter(
-          (task) => task.estimation_item_id !== taskData.estimation_item_id
-        );
-
-        // Update parent row and recalculate totals
-        this.updateParentTotals(parentRow);
-      }
-
-      // Ta bort raden sist, efter att all data har använts
-      row.delete();
-    } catch (error) {
-      console.error("Error in deleteTaskRow:", error);
+    if (parentRow) {
+      let parentData = parentRow.getData();
+      parentData.tasks = parentData.tasks.filter(
+        (task) => task.estimation_item_id !== taskData.estimation_item_id
+      );
+      this.updateParentTotals(parentRow);
     }
+
+    // Ta bort raden sist, efter att all data har använts
+    row.delete();
+
+    // Undvik att använda row-objektet här efteråt!
+  } catch (error) {
+    console.error("Error in deleteTaskRow:", error);
   }
+}
+
 
   /**
    * Adds a new task row to a parent item and updates the subtable and totals.
