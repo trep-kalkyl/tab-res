@@ -11,6 +11,9 @@ class ItemManager {
     this.calculatorService = calculatorService;
     this.allCategories = new Set();
     this.newCategoryCounter = 1;
+    // Flag för att förhindra dubbla tillägg
+    this.isAddingItem = false;
+    this.isAddingTask = false;
     
     // Initiera kategoriset från den ursprungliga datan
     this.refreshCategorySet();
@@ -117,10 +120,12 @@ class ItemManager {
   // Uppdatera en kategori i menytabellen
   updateCategoryInMenu(category) {
     // Beräkna kategorins totaler
-    this.calculatorService.calculateCategoryTotals(this.data, category);
+    const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
     
     // Hitta och uppdatera endast den påverkade kategoriraden
     const menuTable = Tabulator.findTable("#menu-table")[0];
+    if(!menuTable) return; // Kontrollera att tabellen finns
+    
     let menuRows = menuTable.getRows();
     let categoryRow = menuRows.find(
       (row) => row.getData().menu_category === category
@@ -128,7 +133,6 @@ class ItemManager {
     
     if (categoryRow) {
       const rowData = categoryRow.getData();
-      const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
       
       categoryRow.update({
         ...rowData,
@@ -200,84 +204,111 @@ class ItemManager {
 
   // Lägg till en ny uppgiftsrad
   addTaskRow(parentRow) {
-    const parentData = parentRow.getData();
-    const newTask = {
-      estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
-      total_quantity: 1,
-      work_task_duration: 0,
-      work_task_duration_total: 0,
-      material_amount: 1,
-      material_user_price: 0,
-      material_user_price_total: 0,
-    };
+    // Förhindra dubbla tillägg
+    if (this.isAddingTask) return;
+    this.isAddingTask = true;
 
-    // Lägg till den nya uppgiften i överordnad rads uppgiftsarray
-    parentData.tasks.push(newTask);
+    try {
+      const parentData = parentRow.getData();
+      const newTask = {
+        estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
+        total_quantity: 1,
+        work_task_duration: 0,
+        work_task_duration_total: 0,
+        material_amount: 1,
+        material_user_price: 0,
+        material_user_price_total: 0,
+      };
 
-    // Uppdatera bara den specifika överordnade raden
-    parentRow.update(parentData);
+      // Lägg till den nya uppgiften i överordnad rads uppgiftsarray
+      parentData.tasks.push(newTask);
 
-    // Uppdatera bara undertabellen för denna överordnade
-    const subTableHolder = parentRow
-      .getElement()
-      .querySelector(".subtable-holder");
-    if (subTableHolder) {
-      const subTable = subTableHolder.querySelector(".tabulator");
-      if (subTable) {
-        const subTableInstance = Tabulator.findTable(subTable)[0];
-        if (subTableInstance) {
-          // Lägg bara till den nya raden
-          subTableInstance.addData([newTask]);
+      // Uppdatera bara den specifika överordnade raden
+      parentRow.update(parentData);
+
+      // Uppdatera bara undertabellen för denna överordnade
+      const subTableHolder = parentRow
+        .getElement()
+        .querySelector(".subtable-holder");
+      if (subTableHolder) {
+        const subTable = subTableHolder.querySelector(".tabulator");
+        if (subTable) {
+          const subTableInstance = Tabulator.findTable(subTable)[0];
+          if (subTableInstance) {
+            // Lägg bara till den nya raden
+            subTableInstance.addData([newTask]);
+          }
         }
       }
-    }
 
-    // Uppdatera totaler för den överordnade raden
-    this.updateParentTotals(parentRow);
+      // Uppdatera totaler för den överordnade raden
+      this.updateParentTotals(parentRow);
+    } finally {
+      // Återställ flaggan
+      this.isAddingTask = false;
+    }
   }
 
   // Lägg till en ny artikelrad
   addItemRow() {
-    // Välj första tillgängliga kategori eller skapa en ny
-    const firstCategory = Array.from(this.allCategories)[0] || "New Category";
+    // Förhindra dubbla tillägg
+    if (this.isAddingItem) return;
+    this.isAddingItem = true;
+    
+    try {
+      // Välj första tillgängliga kategori eller skapa en ny
+      const firstCategory = Array.from(this.allCategories)[0] || "New Category";
 
-    const newItem = {
-      id: this.data.length + 1,
-      item_name: "New Item",
-      item_category: firstCategory,
-      item_quantity: 1,
-      item_material_user_price: 0,
-      item_material_user_price_total: 0,
-      item_work_task_duration: 0,
-      item_work_task_duration_total: 0,
-      tasks: [
-        {
-          estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
-          total_quantity: 1,
-          work_task_duration: 0,
-          work_task_duration_total: 0,
-          material_amount: 1,
-          material_user_price: 0,
-          material_user_price_total: 0,
-        },
-      ],
-    };
+      const newItem = {
+        id: `item_${Date.now()}`, // Unik ID för att undvika duplicering
+        item_name: "New Item",
+        item_category: firstCategory,
+        item_quantity: 1,
+        item_material_user_price: 0,
+        item_material_user_price_total: 0,
+        item_work_task_duration: 0,
+        item_work_task_duration_total: 0,
+        tasks: [
+          {
+            estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
+            total_quantity: 1,
+            work_task_duration: 0,
+            work_task_duration_total: 0,
+            material_amount: 1,
+            material_user_price: 0,
+            material_user_price_total: 0,
+          },
+        ],
+      };
 
-    // Lägg till i den globala data-arrayen
-    this.data.push(newItem);
+      console.log("Adding new item:", newItem);
 
-    // Lägg bara till den nya raden i dataTable
-    const dataTable = Tabulator.findTable("#data-table")[0];
-    dataTable.addData([newItem]);
+      // Lägg till i den globala data-arrayen
+      this.data.push(newItem);
 
-    // Uppdatera bara den påverkade kategorin i menyn
-    this.updateCategoryInMenu(firstCategory);
+      // Lägg bara till den nya raden i dataTable om den finns
+      const dataTable = Tabulator.findTable("#data-table")[0];
+      if (dataTable) {
+        dataTable.addData([newItem]);
+      } else {
+        console.error("Data table not found");
+      }
+
+      // Uppdatera bara den påverkade kategorin i menyn
+      this.updateCategoryInMenu(firstCategory);
+    } finally {
+      // Återställ flaggan
+      this.isAddingItem = false;
+    }
   }
 
   // Hantera kategoriändring i menytabellen
   handleCategoryEdit(cell, updateFilterCallback, refreshCategoryDropdownsCallback) {
     const oldCategory = cell.getOldValue();
     const newCategory = cell.getValue();
+
+    // Avbryt om det är samma kategori för att undvika onödiga uppdateringar
+    if (oldCategory === newCategory) return;
 
     // Uppdatera allCategories set
     this.allCategories.delete(oldCategory);
@@ -361,7 +392,11 @@ class ItemManager {
 
     // Lägg bara till den nya kategorin i menytabellen
     const menuTable = Tabulator.findTable("#menu-table")[0];
-    menuTable.addData([newCategoryData]);
+    if (menuTable) {
+      menuTable.addData([newCategoryData]);
+    } else {
+      console.error("Menu table not found");
+    }
     
     return newCategory;
   }
@@ -374,6 +409,17 @@ class ItemManager {
     // Hämta menytabellen för att få alla tillgängliga kategorier
     const menuTable = Tabulator.findTable("#menu-table")[0];
     
+    // Kontrollera att menytabellen finns och har data
+    if (!menuTable) {
+      console.error("Menu table not found");
+      const option = document.createElement("option");
+      option.value = category;
+      option.text = category;
+      option.selected = true;
+      select.appendChild(option);
+      return select;
+    }
+    
     menuTable.getData().forEach((row) => {
       const option = document.createElement("option");
       option.value = row.menu_category;
@@ -384,25 +430,40 @@ class ItemManager {
       select.appendChild(option);
     });
 
+    // Använd en variabel för att kontrollera om vi redan hanterar en ändring
+    let isChanging = false;
+    
     select.addEventListener("change", (e) => {
-      const oldCategory = cell.getValue();
-      const newCategory = e.target.value;
+      if (isChanging) return;
+      isChanging = true;
+      
+      try {
+        const oldCategory = cell.getValue();
+        const newCategory = e.target.value;
 
-      // Uppdatera bara den påverkade raden
-      const row = cell.getRow();
-      const rowData = row.getData();
-      rowData.item_category = newCategory;
-      row.update(rowData);
+        // Avbryt om ingen faktisk ändring
+        if (oldCategory === newCategory) {
+          return;
+        }
 
-      // Uppdatera även i den globala data-arrayen
-      const dataIndex = this.data.findIndex((item) => item.id === rowData.id);
-      if (dataIndex !== -1) {
-        this.data[dataIndex].item_category = newCategory;
+        // Uppdatera bara den påverkade raden
+        const row = cell.getRow();
+        const rowData = row.getData();
+        rowData.item_category = newCategory;
+        row.update(rowData);
+
+        // Uppdatera även i den globala data-arrayen
+        const dataIndex = this.data.findIndex((item) => item.id === rowData.id);
+        if (dataIndex !== -1) {
+          this.data[dataIndex].item_category = newCategory;
+        }
+
+        // Uppdatera bara de påverkade kategorierna i menyn
+        this.updateCategoryInMenu(oldCategory);
+        this.updateCategoryInMenu(newCategory);
+      } finally {
+        isChanging = false;
       }
-
-      // Uppdatera bara de påverkade kategorierna i menyn
-      this.updateCategoryInMenu(oldCategory);
-      this.updateCategoryInMenu(newCategory);
     });
     
     return select;
@@ -411,6 +472,11 @@ class ItemManager {
   // Återställ filter för meny
   resetMenuFilter() {
     const menuTable = Tabulator.findTable("#menu-table")[0];
+    
+    if (!menuTable) {
+      console.error("Menu table not found");
+      return;
+    }
     
     // Uppdatera alla menuTable-rader individuellt utan att köra setData
     menuTable.getRows().forEach((row) => {
