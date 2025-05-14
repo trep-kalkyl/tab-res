@@ -69,7 +69,11 @@ class ItemManager {
 
       if (confirmDelete) {
         try {
-          // Remove from allCategories set
+          // Spara data innan vi tar bort raden
+          const row = cell.getRow();
+          const rowData = row.getData();
+          
+          // Ta bort från allCategories set
           this.allCategories.delete(category);
           console.log("Category removed from allCategories");
           console.log("Remaining categories:", Array.from(this.allCategories));
@@ -92,9 +96,8 @@ class ItemManager {
           itemsToRemoveIndexes.forEach((index) => this.data.splice(index, 1));
           console.log("Updated global data:", this.data);
 
-          // Remove the affected category row from the menu table
-          const categoryRow = cell.getRow();
-          categoryRow.delete();
+          // Remove the affected category row from the menu table LAST
+          row.delete();
 
           // Update the filter to reflect changes
           if (updateFilterCallback) {
@@ -205,28 +208,33 @@ class ItemManager {
    * @param {Tabulator.RowComponent} row - The task row to delete.
    */
   deleteTaskRow(row) {
-    let taskData = row.getData();
-    let parentTable = Tabulator.findTable("#data-table")[0];
-    let parentRow = parentTable.getRows().find((pRow) => {
-      let pData = pRow.getData();
-      return pData.tasks.some(
-        (task) => task.estimation_item_id === taskData.estimation_item_id
-      );
-    });
+    try {
+      // Spara data innan vi tar bort raden
+      let taskData = row.getData();
+      let parentTable = Tabulator.findTable("#data-table")[0];
+      let parentRow = parentTable.getRows().find((pRow) => {
+        let pData = pRow.getData();
+        return pData.tasks.some(
+          (task) => task.estimation_item_id === taskData.estimation_item_id
+        );
+      });
 
-    if (parentRow) {
-      let parentData = parentRow.getData();
-      // Keep the same array reference, but filter out the deleted task
-      parentData.tasks = parentData.tasks.filter(
-        (task) => task.estimation_item_id !== taskData.estimation_item_id
-      );
+      if (parentRow) {
+        let parentData = parentRow.getData();
+        // Keep the same array reference, but filter out the deleted task
+        parentData.tasks = parentData.tasks.filter(
+          (task) => task.estimation_item_id !== taskData.estimation_item_id
+        );
 
-      // Update parent row and recalculate totals
-      this.updateParentTotals(parentRow);
+        // Update parent row and recalculate totals
+        this.updateParentTotals(parentRow);
+      }
+
+      // Ta bort raden sist, efter att all data har använts
+      row.delete();
+    } catch (error) {
+      console.error("Error in deleteTaskRow:", error);
     }
-
-    // Remove the current row from the subtable
-    row.delete();
   }
 
   /**
@@ -406,28 +414,28 @@ class ItemManager {
    * Deletes an item row from the data table and updates the menu.
    * @param {Tabulator.CellComponent} cell - The cell in the row to delete.
    */
-deleteItem(cell) {
-  try {
-    // Spara data innan vi tar bort raden
-    const row = cell.getRow();
-    const rowData = row.getData();
-    const category = rowData.item_category;
+  deleteItem(cell) {
+    try {
+      // Spara data innan vi tar bort raden
+      const row = cell.getRow();
+      const rowData = row.getData();
+      const category = rowData.item_category;
 
-    // Ta bort från den globala data-arrayen
-    const index = this.data.findIndex((item) => item.id === rowData.id);
-    if (index !== -1) {
-      this.data.splice(index, 1);
+      // Ta bort från den globala data-arrayen
+      const index = this.data.findIndex((item) => item.id === rowData.id);
+      if (index !== -1) {
+        this.data.splice(index, 1);
+      }
+
+      // Uppdatera kategorin i menyn innan vi tar bort raden
+      this.updateCategoryInMenu(category);
+      
+      // Ta bort raden sist, efter att all data har använts
+      row.delete();
+    } catch (error) {
+      console.error("Error in deleteItem:", error);
     }
-
-    // Uppdatera kategorin i menyn innan vi tar bort raden
-    this.updateCategoryInMenu(category);
-    
-    // Ta bort raden sist, efter att all data har använts
-    row.delete();
-  } catch (error) {
-    console.error("Error in deleteItem:", error);
   }
-}
 
   /**
    * Adds a new category to the menu.
