@@ -49,66 +49,67 @@ class ItemManager {
     button.style.fontSize = "16px";
 
     button.addEventListener("click", () => {
-      const category = cell.getRow().getData().menu_category;
-      console.log("Attempting to delete category:", category);
+      try {
+        // Hämta all data tidigt, innan några förändringar
+        const row = cell.getRow();
+        const rowData = row.getData();
+        const category = rowData.menu_category; // Använd rowData istället för cell.getRow().getData()
+        console.log("Attempting to delete category:", category);
 
-      // Get references to the menu and data tables
-      const menuTable = cell.getTable();
-      const dataTable = Tabulator.findTable("#data-table")[0];
+        // Get references to the menu and data tables
+        const menuTable = cell.getTable();
+        const dataTable = Tabulator.findTable("#data-table")[0];
 
-      // Prevent deletion if only one category remains
-      if (menuTable.getData().length <= 1) {
-        alert("At least one category must remain.");
-        return;
-      }
-
-      // Show a confirmation dialog
-      const confirmDelete = confirm(
-        `Are you sure you want to delete the category "${category}" and all its items?`
-      );
-
-      if (confirmDelete) {
-        try {
-          // Spara data innan vi tar bort raden
-          const row = cell.getRow();
-          const rowData = row.getData();
-          
-          // Ta bort från allCategories set
-          this.allCategories.delete(category);
-          console.log("Category removed from allCategories");
-          console.log("Remaining categories:", Array.from(this.allCategories));
-
-          // Find and delete all affected rows in the data table
-          const rowsToDelete = dataTable
-            .getRows()
-            .filter((row) => row.getData().item_category === category);
-
-          // Remove rows from dataTable one by one
-          rowsToDelete.forEach((row) => row.delete());
-
-          // Remove items from the global data array
-          const itemsToRemoveIndexes = [];
-          this.data.forEach((item, index) => {
-            if (item.item_category === category) {
-              itemsToRemoveIndexes.unshift(index); // Remove from end to avoid index shift
-            }
-          });
-          itemsToRemoveIndexes.forEach((index) => this.data.splice(index, 1));
-          console.log("Updated global data:", this.data);
-
-          // Remove the affected category row from the menu table LAST
-          row.delete();
-
-          // Update the filter to reflect changes
-          if (updateFilterCallback) {
-            updateFilterCallback();
-          }
-        } catch (error) {
-          console.error("Error during deletion:", error);
-          alert(
-            "An error occurred while deleting the category. Please check the console for details."
-          );
+        // Prevent deletion if only one category remains
+        if (menuTable.getData().length <= 1) {
+          alert("At least one category must remain.");
+          return;
         }
+
+        // Show a confirmation dialog
+        const confirmDelete = confirm(
+          `Are you sure you want to delete the category "${category}" and all its items?`
+        );
+
+        if (!confirmDelete) {
+          return;
+        }
+
+        // Ta bort från allCategories set
+        this.allCategories.delete(category);
+        console.log("Category removed from allCategories");
+        console.log("Remaining categories:", Array.from(this.allCategories));
+
+        // Skapa en kopia av påverkade rader för att undvika problem med förändringar under iteration
+        const rowsToDelete = dataTable
+          .getRows()
+          .filter((row) => row.getData().item_category === category);
+
+        // Remove items from the global data array
+        const itemsToRemoveIndexes = [];
+        this.data.forEach((item, index) => {
+          if (item.item_category === category) {
+            itemsToRemoveIndexes.unshift(index); // Remove from end to avoid index shift
+          }
+        });
+        itemsToRemoveIndexes.forEach((index) => this.data.splice(index, 1));
+        console.log("Updated global data:", this.data);
+
+        // Remove rows from dataTable one by one
+        rowsToDelete.forEach((row) => row.delete());
+
+        // Ta bort menyraden sist, efter att all data har använts
+        row.delete();
+
+        // Update the filter to reflect changes efter att raden tagits bort
+        if (updateFilterCallback) {
+          updateFilterCallback();
+        }
+      } catch (error) {
+        console.error("Error during category deletion:", error);
+        alert(
+          "An error occurred while deleting the category. Please check the console for details."
+        );
       }
     });
 
