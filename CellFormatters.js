@@ -190,3 +190,27 @@ export function svSE_phoneFormatter(cell) {
     if (!value) return "-";
     return value.replace(/^(\d{3})(\d{3})(\d{2})(\d{2})$/, "$1-$2 $3 $4");
 }
+
+/**
+ * svSE_preserveRawNumberFormatter
+ * Displays the cell value exactly as entered, but converts decimal point (.) to comma (,) and adds Swedish thousand separators.
+ * Usage: formatter: svSE_Formatters.svSE_preserveRawNumberFormatter
+ */
+export function svSE_preserveRawNumberFormatter(cell) {
+    let value = cell.getValue();
+
+    if (value === null || value === undefined || value === "") return "-";
+
+    // If value is a number, convert to string
+    value = value.toString();
+
+    // Replace decimal point with comma (if present)
+    value = value.replace(".", ",");
+
+    // Add thousand separator if applicable (only for integer part)
+    // Split into integer and decimal part
+    let [intPart, decPart] = value.split(",");
+    intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+    return decPart !== undefined ? intPart + "," + decPart : intPart;
+}
