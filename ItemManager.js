@@ -1,44 +1,27 @@
 /**
  * ItemManager.js
- *
- * Responsible for managing items and tasks, including creation, updating, and deletion.
- * Works together with CalculatorService for all calculations.
+ * 
+ * Ansvarar för hantering av items och tasks, inklusive skapande, uppdatering och borttagning.
+ * Fungerar tillsammans med CalculatorService för beräkningar.
  */
 
 class ItemManager {
-  /**
-   * Constructor initializes the manager with a data source and calculator service.
-   * Also sets up the category set and internal flags.
-   * @param {Array} dataSource - The main data array for items.
-   * @param {CalculatorService} calculatorService - The calculation utility.
-   */
   constructor(dataSource, calculatorService) {
     this.data = dataSource;
     this.calculatorService = calculatorService;
     this.allCategories = new Set();
     this.newCategoryCounter = 1;
-    // Flags to prevent duplicate additions
-    this.isAddingItem = false;
-    this.isAddingTask = false;
-
-    // Initialize the category set from the initial data
+    
+    // Initiera kategoriset från den ursprungliga datan
     this.refreshCategorySet();
   }
 
-  /**
-   * Refreshes the allCategories set based on the current data.
-   */
+  // Uppdatera allCategories set baserat på aktuell data
   refreshCategorySet() {
     this.allCategories = new Set(this.data.map((item) => item.item_category));
   }
 
-  /**
-   * Creates a delete button for a category in the menu table.
-   * Handles confirmation, deletion from all relevant data structures, and UI updates.
-   * @param {Tabulator.CellComponent} cell - The cell where the button is rendered.
-   * @param {Function} updateFilterCallback - Callback to update filters after deletion.
-   * @returns {HTMLButtonElement} - The delete button element.
-   */
+  // Skapa en knapp för att ta bort kategorier
   createDeleteButton(cell, updateFilterCallback) {
     const button = document.createElement("button");
     button.innerHTML = "✖";
@@ -49,83 +32,75 @@ class ItemManager {
     button.style.fontSize = "16px";
 
     button.addEventListener("click", () => {
-      try {
-        // Hämta all data tidigt, innan några förändringar
-        const row = cell.getRow();
-        const rowData = row.getData();
-        const category = rowData.menu_category; // Använd rowData istället för cell.getRow().getData()
-        console.log("Attempting to delete category:", category);
+      const category = cell.getRow().getData().menu_category;
+      console.log("Attempting to delete category:", category);
 
-        // Get references to the menu and data tables
-        const menuTable = cell.getTable();
-        const dataTable = Tabulator.findTable("#data-table")[0];
+      // Hämta tabeller
+      const menuTable = cell.getTable();
+      const dataTable = Tabulator.findTable("#data-table")[0];
 
-        // Prevent deletion if only one category remains
-        if (menuTable.getData().length <= 1) {
-          alert("At least one category must remain.");
-          return;
-        }
+      // Förhindra radering om det är den sista kategorin
+      if (menuTable.getData().length <= 1) {
+        alert("At least one category must remain.");
+        return;
+      }
 
-        // Show a confirmation dialog
-        const confirmDelete = confirm(
-          `Are you sure you want to delete the category "${category}" and all its items?`
-        );
+      // Visa en bekräftelsedialog
+      const confirmDelete = confirm(
+        `Are you sure you want to delete the category "${category}" and all its items?`
+      );
 
-        if (!confirmDelete) {
-          return;
-        }
+      if (confirmDelete) {
+        try {
+          // Ta bort från allCategories
+          this.allCategories.delete(category);
+          console.log("Category removed from allCategories");
+          console.log("Remaining categories:", Array.from(this.allCategories));
 
-        // Ta bort från allCategories set
-        this.allCategories.delete(category);
-        console.log("Category removed from allCategories");
-        console.log("Remaining categories:", Array.from(this.allCategories));
+          // Hitta alla påverkade rader i dataTable
+          const rowsToDelete = dataTable
+            .getRows()
+            .filter((row) => row.getData().item_category === category);
 
-        // Skapa en kopia av påverkade rader för att undvika problem med förändringar under iteration
-        const rowsToDelete = dataTable
-          .getRows()
-          .filter((row) => row.getData().item_category === category);
+          // Ta bort rader från dataTable en efter en utan att rita om hela tabellen
+          rowsToDelete.forEach((row) => row.delete());
 
-        // Remove items from the global data array
-        const itemsToRemoveIndexes = [];
-        this.data.forEach((item, index) => {
-          if (item.item_category === category) {
-            itemsToRemoveIndexes.unshift(index); // Remove from end to avoid index shift
+          // Ta bort från den globala data-arrayen
+          const itemsToRemoveIndexes = [];
+          this.data.forEach((item, index) => {
+            if (item.item_category === category) {
+              itemsToRemoveIndexes.unshift(index); // Lägg till i början för att ta bort från slutet
+            }
+          });
+          itemsToRemoveIndexes.forEach((index) => this.data.splice(index, 1));
+          console.log("Updated global data:", this.data);
+
+          // Ta bara bort den påverkade kategoriraden från menytabellen
+          const categoryRow = cell.getRow();
+          categoryRow.delete();
+
+          // Uppdatera filtret för att spegla ändringar
+          if (updateFilterCallback) {
+            updateFilterCallback();
           }
-        });
-        itemsToRemoveIndexes.forEach((index) => this.data.splice(index, 1));
-        console.log("Updated global data:", this.data);
-
-        // Remove rows from dataTable one by one
-        rowsToDelete.forEach((row) => row.delete());
-
-        // Ta bort menyraden sist, efter att all data har använts
-        row.delete();
-
-        // Update the filter to reflect changes efter att raden tagits bort
-        if (updateFilterCallback) {
-          updateFilterCallback();
+        } catch (error) {
+          console.error("Error during deletion:", error);
+          alert(
+            "An error occurred while deleting the category. Please check the console for details."
+          );
         }
-      } catch (error) {
-        console.error("Error during category deletion:", error);
-        alert(
-          "An error occurred while deleting the category. Please check the console for details."
-        );
       }
     });
 
     return button;
   }
 
-  /**
-   * Updates totals for a parent (item) row based on its tasks.
-   * Only the specific parent row and its category in the menu are updated.
-   * @param {Tabulator.RowComponent} parentRow - The parent row to update.
-   */
+  // Uppdatera totaler för en överordnad rad
   updateParentTotals(parentRow) {
     const rowData = parentRow.getData();
     const totals = this.calculatorService.calculateProjectTotals(rowData.tasks);
 
-    // Update only the specific parent row
+    // Uppdatera bara den specifika överordnade raden
     parentRow.update({
       item_work_task_duration: totals.item_work_task_duration,
       item_material_user_price: totals.item_material_user_price,
@@ -135,30 +110,26 @@ class ItemManager {
         rowData.item_quantity * totals.item_work_task_duration,
     });
 
-    // Update only the affected category in the menu
+    // Uppdatera bara den påverkade kategorin i menyn
     this.updateCategoryInMenu(rowData.item_category);
   }
 
-  /**
-   * Updates a specific category row in the menu table with new totals.
-   * @param {String} category - The category to update.
-   */
+  // Uppdatera en kategori i menytabellen
   updateCategoryInMenu(category) {
-    // Calculate new totals for this category
-    const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
-
-    // Find and update only the affected category row in the menu table
+    // Beräkna kategorins totaler
+    this.calculatorService.calculateCategoryTotals(this.data, category);
+    
+    // Hitta och uppdatera endast den påverkade kategoriraden
     const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (!menuTable) return; // Ensure the table exists
-
     let menuRows = menuTable.getRows();
     let categoryRow = menuRows.find(
       (row) => row.getData().menu_category === category
     );
-
+    
     if (categoryRow) {
       const rowData = categoryRow.getData();
-
+      const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
+      
       categoryRow.update({
         ...rowData,
         category_material_user_price_total:
@@ -169,21 +140,18 @@ class ItemManager {
     }
   }
 
-  /**
-   * Updates calculations for a task row in a subtable and propagates changes to the parent.
-   * @param {Tabulator.CellComponent} cell - The edited cell in the subtable.
-   */
+  // Uppdatera beräkningar i en underordnad tabell
   updateCalculations(cell) {
     let row = cell.getRow();
     let data = row.getData();
 
-    // Calculate totals using CalculatorService
+    // Beräkna totaler med hjälp av CalculatorService
     data = this.calculatorService.updateTaskTotals(data);
 
-    // Update the task row
+    // Uppdatera uppgiftsraden
     row.update(data);
 
-    // Find and update the correct parent row in the main table
+    // Hitta och uppdatera korrekt överordnad rad
     let parentTable = Tabulator.findTable("#data-table")[0];
     let parentRow = parentTable.getRows().find((pRow) => {
       let pData = pRow.getData();
@@ -204,13 +172,8 @@ class ItemManager {
     }
   }
 
-  /**
-   * Deletes a task row and updates calculations in the parent row.
-   * @param {Tabulator.RowComponent} row - The task row to delete.
-   */
+  // Ta bort en uppgiftsrad och uppdatera beräkningar
   deleteTaskRow(row) {
-  try {
-    // Spara data innan vi tar bort raden
     let taskData = row.getData();
     let parentTable = Tabulator.findTable("#data-table")[0];
     let parentRow = parentTable.getRows().find((pRow) => {
@@ -222,231 +185,173 @@ class ItemManager {
 
     if (parentRow) {
       let parentData = parentRow.getData();
+      // Behåll referensen till den ursprungliga arrayen men filtrera innehållet
       parentData.tasks = parentData.tasks.filter(
         (task) => task.estimation_item_id !== taskData.estimation_item_id
       );
+
+      // Uppdatera överordnad rad och beräkna nya totaler
       this.updateParentTotals(parentRow);
     }
 
-    // Ta bort raden sist, efter att all data har använts
+    // Ta bort den aktuella raden från undertabellen
     row.delete();
-
-    // Undvik att använda row-objektet här efteråt!
-  } catch (error) {
-    console.error("Error in deleteTaskRow:", error);
   }
-}
 
-
-  /**
-   * Adds a new task row to a parent item and updates the subtable and totals.
-   * Prevents duplicate additions using a flag.
-   * @param {Tabulator.RowComponent} parentRow - The parent row to add a task to.
-   */
+  // Lägg till en ny uppgiftsrad
   addTaskRow(parentRow) {
-    // Prevent duplicate additions
-    if (this.isAddingTask) return;
-    this.isAddingTask = true;
+    const parentData = parentRow.getData();
+    const newTask = {
+      estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
+      total_quantity: 1,
+      work_task_duration: 0,
+      work_task_duration_total: 0,
+      material_amount: 1,
+      material_user_price: 0,
+      material_user_price_total: 0,
+    };
 
-    try {
-      const parentData = parentRow.getData();
-      const newTask = {
-        estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
-        total_quantity: 1,
-        work_task_duration: 0,
-        work_task_duration_total: 0,
-        material_amount: 1,
-        material_user_price: 0,
-        material_user_price_total: 0,
-      };
+    // Lägg till den nya uppgiften i överordnad rads uppgiftsarray
+    parentData.tasks.push(newTask);
 
-      // Add the new task to the parent's tasks array
-      parentData.tasks.push(newTask);
+    // Uppdatera bara den specifika överordnade raden
+    parentRow.update(parentData);
 
-      // Update only the specific parent row
-      parentRow.update(parentData);
-
-      // Update only the subtable for this parent
-      const subTableHolder = parentRow
-        .getElement()
-        .querySelector(".subtable-holder");
-      if (subTableHolder) {
-        const subTable = subTableHolder.querySelector(".tabulator");
-        if (subTable) {
-          const subTableInstance = Tabulator.findTable(subTable)[0];
-          if (subTableInstance) {
-            // Add only the new row
-            subTableInstance.addData([newTask]);
-          }
+    // Uppdatera bara undertabellen för denna överordnade
+    const subTableHolder = parentRow
+      .getElement()
+      .querySelector(".subtable-holder");
+    if (subTableHolder) {
+      const subTable = subTableHolder.querySelector(".tabulator");
+      if (subTable) {
+        const subTableInstance = Tabulator.findTable(subTable)[0];
+        if (subTableInstance) {
+          // Lägg bara till den nya raden
+          subTableInstance.addData([newTask]);
         }
       }
-
-      // Update totals for the parent row
-      this.updateParentTotals(parentRow);
-    } finally {
-      // Reset the flag
-      this.isAddingTask = false;
     }
+
+    // Uppdatera totaler för den överordnade raden
+    this.updateParentTotals(parentRow);
   }
 
-  /**
-   * Adds a new item row to the main data table and updates the menu.
-   * Prevents duplicate additions using a flag.
-   */
+  // Lägg till en ny artikelrad
   addItemRow() {
-    // Prevent duplicate additions
-    if (this.isAddingItem) return;
-    this.isAddingItem = true;
+    // Välj första tillgängliga kategori eller skapa en ny
+    const firstCategory = Array.from(this.allCategories)[0] || "New Category";
 
-    try {
-      // Select first available category or create a new one
-      const firstCategory = Array.from(this.allCategories)[0] || "New Category";
+    const newItem = {
+      id: this.data.length + 1,
+      item_name: "New Item",
+      item_category: firstCategory,
+      item_quantity: 1,
+      item_material_user_price: 0,
+      item_material_user_price_total: 0,
+      item_work_task_duration: 0,
+      item_work_task_duration_total: 0,
+      tasks: [
+        {
+          estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
+          total_quantity: 1,
+          work_task_duration: 0,
+          work_task_duration_total: 0,
+          material_amount: 1,
+          material_user_price: 0,
+          material_user_price_total: 0,
+        },
+      ],
+    };
 
-      const newItem = {
-        id: `item_${Date.now()}`, // Unique ID to avoid duplication
-        item_name: "New Item",
-        item_category: firstCategory,
-        item_quantity: 1,
-        item_material_user_price: 0,
-        item_material_user_price_total: 0,
-        item_work_task_duration: 0,
-        item_work_task_duration_total: 0,
-        tasks: [
-          {
-            estimation_item_id: `E${Math.floor(Math.random() * 1000)}`,
-            total_quantity: 1,
-            work_task_duration: 0,
-            work_task_duration_total: 0,
-            material_amount: 1,
-            material_user_price: 0,
-            material_user_price_total: 0,
-          },
-        ],
-      };
+    // Lägg till i den globala data-arrayen
+    this.data.push(newItem);
 
-      console.log("Adding new item:", newItem);
+    // Lägg bara till den nya raden i dataTable
+    const dataTable = Tabulator.findTable("#data-table")[0];
+    dataTable.addData([newItem]);
 
-      // Add to the global data array
-      this.data.push(newItem);
-
-      // Add only the new row to the dataTable if it exists
-      const dataTable = Tabulator.findTable("#data-table")[0];
-      if (dataTable) {
-        dataTable.addData([newItem]);
-      } else {
-        console.error("Data table not found");
-      }
-
-      // Update only the affected category in the menu
-      this.updateCategoryInMenu(firstCategory);
-    } finally {
-      // Reset the flag
-      this.isAddingItem = false;
-    }
+    // Uppdatera bara den påverkade kategorin i menyn
+    this.updateCategoryInMenu(firstCategory);
   }
 
-  /**
-   * Handles category editing in the menu table.
-   * Updates all relevant data, filters, and dropdowns.
-   * @param {Tabulator.CellComponent} cell - The edited cell.
-   * @param {Function} updateFilterCallback - Callback to update filters.
-   * @param {Function} refreshCategoryDropdownsCallback - Callback to refresh dropdowns.
-   */
+  // Hantera kategoriändring i menytabellen
   handleCategoryEdit(cell, updateFilterCallback, refreshCategoryDropdownsCallback) {
     const oldCategory = cell.getOldValue();
     const newCategory = cell.getValue();
 
-    // Abort if category hasn't changed
-    if (oldCategory === newCategory) return;
-
-    // Update allCategories set
+    // Uppdatera allCategories set
     this.allCategories.delete(oldCategory);
     this.allCategories.add(newCategory);
 
-    // Update category name in all affected items
+    // Uppdatera kategorinamn i alla påverkade artiklar
     const dataTable = Tabulator.findTable("#data-table")[0];
     const affectedRows = dataTable
       .getRows()
       .filter((row) => row.getData().item_category === oldCategory);
 
-    // Update each affected row
+    // Uppdatera varje påverkad rad
     affectedRows.forEach((row) => {
       const rowData = row.getData();
       rowData.item_category = newCategory;
       row.update(rowData);
     });
 
-    // Also update in the global data array
+    // Uppdatera även i den globala data-arrayen
     this.data.forEach((item) => {
       if (item.item_category === oldCategory) {
         item.item_category = newCategory;
       }
     });
 
-    // Update filter if callback provided
+    // Uppdatera filtret
     if (updateFilterCallback) {
       updateFilterCallback();
     }
 
-    // Refresh dropdowns if callback provided
+    // Uppdatera rullgardinsmenyer i datatabellen
     if (refreshCategoryDropdownsCallback) {
       refreshCategoryDropdownsCallback();
     }
   }
 
-  /**
-   * Handles quantity editing for an item row.
-   * Updates totals using CalculatorService and updates the menu.
-   * @param {Tabulator.CellComponent} cell - The edited cell.
-   */
+  // Uppdatera kvantitet för en artikel
   handleQuantityEdit(cell) {
     const row = cell.getRow();
     const rowData = row.getData();
 
-    // Update totals for this row with CalculatorService
+    // Uppdatera totaler för denna rad med CalculatorService
     this.calculatorService.updateItemTotals(rowData);
     row.update(rowData);
 
-    // Update only the affected category in the menu
+    // Uppdatera bara den påverkade kategorin i menyn
     this.updateCategoryInMenu(rowData.item_category);
   }
 
-  /**
-   * Deletes an item row from the data table and updates the menu.
-   * @param {Tabulator.CellComponent} cell - The cell in the row to delete.
-   */
+  // Ta bort en artikel
   deleteItem(cell) {
-    try {
-      // Spara data innan vi tar bort raden
-      const row = cell.getRow();
-      const rowData = row.getData();
-      const category = rowData.item_category;
+    const row = cell.getRow();
+    const rowData = row.getData();
+    const category = rowData.item_category;
 
-      // Ta bort från den globala data-arrayen
-      const index = this.data.findIndex((item) => item.id === rowData.id);
-      if (index !== -1) {
-        this.data.splice(index, 1);
-      }
-
-      // Uppdatera kategorin i menyn innan vi tar bort raden
-      this.updateCategoryInMenu(category);
-      
-      // Ta bort raden sist, efter att all data har använts
-      row.delete();
-    } catch (error) {
-      console.error("Error in deleteItem:", error);
+    // Ta bort från den globala data-arrayen
+    const index = this.data.findIndex((item) => item.id === rowData.id);
+    if (index !== -1) {
+      this.data.splice(index, 1);
     }
+
+    // Ta bara bort denna specifika rad
+    row.delete();
+
+    // Uppdatera bara den påverkade kategorin i menyn
+    this.updateCategoryInMenu(category);
   }
 
-  /**
-   * Adds a new category to the menu.
-   * @returns {String} The name of the new category.
-   */
+  // Lägg till en ny kategori i menyn
   addMenuCategory() {
     const newCategory = `New Category ${this.newCategoryCounter++}`;
     this.allCategories.add(newCategory);
 
-    // Create a new category object
+    // Skapa ett nytt kategoriobjekt
     const newCategoryData = {
       menu_category: newCategory,
       category_material_user_price_total: 0,
@@ -454,42 +359,21 @@ class ItemManager {
       selected: true,
     };
 
-    // Add only the new category to the menu table
+    // Lägg bara till den nya kategorin i menytabellen
     const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (menuTable) {
-      menuTable.addData([newCategoryData]);
-    } else {
-      console.error("Menu table not found");
-    }
-
+    menuTable.addData([newCategoryData]);
+    
     return newCategory;
   }
 
-  /**
-   * Renders a category dropdown for the data table.
-   * Ensures all available categories are shown.
-   * @param {Tabulator.CellComponent} cell - The cell to render the dropdown for.
-   * @returns {HTMLSelectElement} The dropdown element.
-   */
+  // Rendera kategori-dropdown för dataTable
   renderCategoryDropdown(cell) {
     const category = cell.getValue();
     const select = document.createElement("select");
-
-    // Get the menu table to retrieve all available categories
+    
+    // Hämta menytabellen för att få alla tillgängliga kategorier
     const menuTable = Tabulator.findTable("#menu-table")[0];
-
-    // If menu table is missing, fallback to just the current category
-    if (!menuTable) {
-      console.error("Menu table not found");
-      const option = document.createElement("option");
-      option.value = category;
-      option.text = category;
-      option.selected = true;
-      select.appendChild(option);
-      return select;
-    }
-
-    // Add all categories from the menu table as options
+    
     menuTable.getData().forEach((row) => {
       const option = document.createElement("option");
       option.value = row.menu_category;
@@ -500,57 +384,35 @@ class ItemManager {
       select.appendChild(option);
     });
 
-    // Prevent duplicate change handling
-    let isChanging = false;
-
     select.addEventListener("change", (e) => {
-      if (isChanging) return;
-      isChanging = true;
+      const oldCategory = cell.getValue();
+      const newCategory = e.target.value;
 
-      try {
-        const oldCategory = cell.getValue();
-        const newCategory = e.target.value;
+      // Uppdatera bara den påverkade raden
+      const row = cell.getRow();
+      const rowData = row.getData();
+      rowData.item_category = newCategory;
+      row.update(rowData);
 
-        // Abort if no actual change
-        if (oldCategory === newCategory) {
-          return;
-        }
-
-        // Update only the affected row
-        const row = cell.getRow();
-        const rowData = row.getData();
-        rowData.item_category = newCategory;
-        row.update(rowData);
-
-        // Also update in the global data array
-        const dataIndex = this.data.findIndex((item) => item.id === rowData.id);
-        if (dataIndex !== -1) {
-          this.data[dataIndex].item_category = newCategory;
-        }
-
-        // Update only the affected categories in the menu
-        this.updateCategoryInMenu(oldCategory);
-        this.updateCategoryInMenu(newCategory);
-      } finally {
-        isChanging = false;
+      // Uppdatera även i den globala data-arrayen
+      const dataIndex = this.data.findIndex((item) => item.id === rowData.id);
+      if (dataIndex !== -1) {
+        this.data[dataIndex].item_category = newCategory;
       }
-    });
 
+      // Uppdatera bara de påverkade kategorierna i menyn
+      this.updateCategoryInMenu(oldCategory);
+      this.updateCategoryInMenu(newCategory);
+    });
+    
     return select;
   }
 
-  /**
-   * Resets the menu filter to show all categories as selected.
-   */
+  // Återställ filter för meny
   resetMenuFilter() {
     const menuTable = Tabulator.findTable("#menu-table")[0];
-
-    if (!menuTable) {
-      console.error("Menu table not found");
-      return;
-    }
-
-    // Update all menuTable rows individually without calling setData
+    
+    // Uppdatera alla menuTable-rader individuellt utan att köra setData
     menuTable.getRows().forEach((row) => {
       const rowData = row.getData();
       rowData.selected = true;
@@ -559,5 +421,5 @@ class ItemManager {
   }
 }
 
-// Export the ItemManager class as the default export of this module
+// Exportera klassen för användning i andra moduler
 export default ItemManager;
