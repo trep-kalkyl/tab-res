@@ -194,6 +194,7 @@ export function svSE_phoneFormatter(cell) {
 /**
  * svSE_preserveRawNumberFormatter
  * Displays the cell value as entered, but always uses comma as decimal separator and Swedish thousand separators.
+ * Negative numbers are displayed in red.
  * Usage: formatter: svSE_Formatters.svSE_preserveRawNumberFormatter
  */
 export function svSE_preserveRawNumberFormatter(cell) {
@@ -201,23 +202,30 @@ export function svSE_preserveRawNumberFormatter(cell) {
 
     if (value === null || value === undefined || value === "") return "-";
 
-    // If value is a number, format it with Swedish locale
+    // Determine if value is negative
+    let isNegative = false;
+
+    // If value is a number
     if (typeof value === "number") {
-        // Show all decimals present in the number (no rounding)
-        // Convert to string using locale, but keep all decimals
-        return value.toLocaleString("sv-SE", { useGrouping: true, maximumFractionDigits: 20 });
+        isNegative = value < 0;
+        // Format with Swedish locale (all decimals)
+        value = value.toLocaleString("sv-SE", { useGrouping: true, maximumFractionDigits: 20 });
+    } else {
+        // If value is a string, check if it starts with minus
+        isNegative = /^-/.test(value.trim());
+        // Remove spaces and commas (thousand separators)
+        let raw = value.replace(/[\s,]/g, '');
+        // Split on dot or comma
+        let [intPart, decPart] = raw.split(/[.,]/);
+        // Add thousand separator
+        intPart = intPart.replace(/^-/,'').replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+        value = (isNegative ? "-" : "") + (decPart !== undefined ? intPart + "," + decPart : intPart);
     }
 
-    // If value is a string (e.g. user input), replace decimal point with comma and add thousand separators
-    // Remove any existing thousand separators (space or comma)
-    value = value.replace(/[\s,]/g, '');
-
-    // Split into integer and decimal part (dot or comma as decimal separator)
-    let [intPart, decPart] = value.split(/[.,]/);
-
-    // Add Swedish thousand separator (space) to integer part
-    intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-    return decPart !== undefined ? intPart + "," + decPart : intPart;
+    // Wrap negative numbers in a span with red color
+    if (isNegative) {
+        return `<span style="color: red;">${value}</span>`;
+    }
+    return value;
 }
 
