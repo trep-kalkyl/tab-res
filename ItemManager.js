@@ -32,24 +32,9 @@ class ItemManager {
     button.style.fontSize = "16px";
 
     button.addEventListener("click", () => {
-      // Hämta data först innan vi gör någon ändring
-      const row = cell.getRow();
-      if (!row) {
-        console.error("Row reference is invalid");
-        return;
-      }
-      
-      const rowData = row.getData();
-      if (!rowData) {
-        console.error("Unable to get row data");
-        return;
-      }
-      
-      const category = rowData.menu_category;
-      console.log("Attempting to delete category:", category);
-
-      // Hämta tabeller
-      const menuTable = cell.getTable();
+      // VIKTIGT: Hämta all nödvändig information innan någon operation utförs
+      // eftersom cell-referensen kan bli ogiltig efter borttagning
+      const menuTable = Tabulator.findTable("#menu-table")[0];
       if (!menuTable) {
         console.error("Menu table reference is invalid");
         return;
@@ -60,6 +45,25 @@ class ItemManager {
         console.error("Data table reference is invalid");
         return;
       }
+
+      // Hämta data direkt från tabellen istället för genom cell-referensen
+      // Detta är säkrare än att använda cell.getRow()
+      const row = cell.getRow();
+      if (!row) {
+        console.error("Row reference is invalid");
+        return;
+      }
+      
+      // Viktigt - spara alla nödvändiga data INNAN vi gör någon ändring
+      const rowIndex = row.getIndex();
+      const rowData = row.getData();
+      if (!rowData) {
+        console.error("Unable to get row data");
+        return;
+      }
+      
+      const category = rowData.menu_category;
+      console.log("Attempting to delete category:", category);
 
       // Förhindra radering om det är den sista kategorin
       if (menuTable.getData().length <= 1) {
@@ -79,12 +83,12 @@ class ItemManager {
           console.log("Category removed from allCategories");
           console.log("Remaining categories:", Array.from(this.allCategories));
 
-          // Först spara alla påverkade rader och deras data
-          const rowsToDeleteData = [];
+          // Samla information om påverkade rader först
+          const rowsToDelete = [];
           dataTable.getRows().forEach(dataRow => {
-            const rowData = dataRow.getData();
-            if (rowData && rowData.item_category === category) {
-              rowsToDeleteData.push(rowData);
+            const data = dataRow.getData();
+            if (data && data.item_category === category) {
+              rowsToDelete.push(dataRow.getIndex());
             }
           });
 
@@ -92,19 +96,18 @@ class ItemManager {
           this.data = this.data.filter(item => item.item_category !== category);
           console.log("Updated global data:", this.data);
 
-          // Säkert ta bort rader från dataTable
-          dataTable.getRows().forEach(dataRow => {
-            const data = dataRow.getData();
-            if (data && data.item_category === category) {
-              // Använd deleteRow som är säkrare än row.delete()
-              dataTable.deleteRow(dataRow.getIndex());
-            }
+          // Ta bort rader från dataTable i omvänd ordning (från slutet)
+          // för att undvika problem med ändrade index
+          rowsToDelete.sort((a, b) => b - a).forEach(index => {
+            dataTable.deleteRow(index);
           });
 
           // Ta bort kategoriraden från menytabellen
-          menuTable.deleteRow(row.getIndex());
+          // Använd det tidigare sparade indexet eftersom row-referensen kan vara ogiltig nu
+          menuTable.deleteRow(rowIndex);
 
           // Uppdatera filtret för att spegla ändringar
+          // VIKTIGT: Nu använder vi inte cell eller row längre eftersom de kan vara ogiltiga
           if (updateFilterCallback) {
             updateFilterCallback();
           }
@@ -241,13 +244,17 @@ class ItemManager {
       return;
     }
     
-    let taskData = row.getData();
+    // VIKTIGT: Spara all nödvändig data innan vi gör något som kan göra row ogiltig
+    const taskData = row.getData();
     if (!taskData) {
       console.error("Unable to get task data");
       return;
     }
     
     const estimationId = taskData.estimation_item_id;
+    const rowIndex = row.getIndex();
+    const subTable = row.getTable();
+    
     let parentTable = Tabulator.findTable("#data-table")[0];
     if (!parentTable) {
       console.error("Parent table reference is invalid");
@@ -261,26 +268,28 @@ class ItemManager {
     );
     
     if (parentIndex !== -1) {
+      // Uppdatera den globala data-arrayen först
       const parentRow = parentTable.getRow(parentIndex);
       if (parentRow) {
         let parentRowData = parentRow.getData();
         const category = parentRowData.item_category;
         
-        // Behåll referensen till den ursprungliga arrayen men filtrera innehållet
-        parentRowData.tasks = parentRowData.tasks.filter(
-          (task) => task.estimation_item_id !== estimationId
-        );
-        
-        // Uppdatera först den globala data-arrayen
+        // Uppdatera den globala data-arrayen först
         const globalIndex = this.data.findIndex(item => item.id === parentRowData.id);
         if (globalIndex !== -1) {
-          this.data[globalIndex].tasks = [...parentRowData.tasks];
+          this.data[globalIndex].tasks = this.data[globalIndex].tasks.filter(
+            task => task.estimation_item_id !== estimationId
+          );
         }
-
-        // Ta bort den aktuella raden från undertabellen innan vi gör andra ändringar
-        const subTable = row.getTable();
+        
+        // Uppdatera sedan den lokala data-strukturen
+        parentRowData.tasks = parentRowData.tasks.filter(
+          task => task.estimation_item_id !== estimationId
+        );
+        
+        // Ta bort uppgiftsraden EFTER att alla datastrukturer är uppdaterade
         if (subTable) {
-          subTable.deleteRow(row.getIndex());
+          subTable.deleteRow(rowIndex);
         }
         
         // Uppdatera överordnad rad och beräkna nya totaler
@@ -288,9 +297,8 @@ class ItemManager {
       }
     } else {
       // Om vi inte hittade en föräldrarad, ta bara bort uppgiftsraden
-      const subTable = row.getTable();
       if (subTable) {
-        subTable.deleteRow(row.getIndex());
+        subTable.deleteRow(rowIndex);
       }
     }
   }
@@ -488,6 +496,7 @@ class ItemManager {
       return;
     }
     
+    // VIKTIGT: Spara all nödvändig information innan någon operation utförs
     const row = cell.getRow();
     if (!row) {
       console.error("Row reference is invalid");
@@ -502,17 +511,20 @@ class ItemManager {
     
     const category = rowData.item_category;
     const itemId = rowData.id;
+    const rowIndex = row.getIndex();
+    const dataTable = cell.getTable(); // Spara tabellreferensen
 
-    // Ta bort från den globala data-arrayen först
+    // Uppdatera den globala data-arrayen INNAN radoperationer
     this.data = this.data.filter(item => item.id !== itemId);
 
-    // Använd deleteRow som är säkrare än row.delete()
-    const dataTable = row.getTable();
+    // Använd det sparade indexet och tabellreferensen för att ta bort raden
+    // EFTER att vi har uppdaterat alla datastrukturer
     if (dataTable) {
-      dataTable.deleteRow(row.getIndex());
+      dataTable.deleteRow(rowIndex);
     }
 
     // Uppdatera bara den påverkade kategorin i menyn
+    // Detta körs EFTER att raden har tagits bort
     this.updateCategoryInMenu(category);
   }
 
