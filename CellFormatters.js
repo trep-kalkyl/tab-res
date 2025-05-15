@@ -193,7 +193,7 @@ export function svSE_phoneFormatter(cell) {
 
 /**
  * svSE_preserveRawNumberFormatter
- * Displays the cell value exactly as entered, but converts decimal point (.) to comma (,) and adds Swedish thousand separators.
+ * Displays the cell value as entered, but always uses comma as decimal separator and Swedish thousand separators.
  * Usage: formatter: svSE_Formatters.svSE_preserveRawNumberFormatter
  */
 export function svSE_preserveRawNumberFormatter(cell) {
@@ -201,16 +201,23 @@ export function svSE_preserveRawNumberFormatter(cell) {
 
     if (value === null || value === undefined || value === "") return "-";
 
-    // If value is a number, convert to string
-    value = value.toString();
+    // If value is a number, format it with Swedish locale
+    if (typeof value === "number") {
+        // Show all decimals present in the number (no rounding)
+        // Convert to string using locale, but keep all decimals
+        return value.toLocaleString("sv-SE", { useGrouping: true, maximumFractionDigits: 20 });
+    }
 
-    // Replace decimal point with comma (if present)
-    value = value.replace(".", ",");
+    // If value is a string (e.g. user input), replace decimal point with comma and add thousand separators
+    // Remove any existing thousand separators (space or comma)
+    value = value.replace(/[\s,]/g, '');
 
-    // Add thousand separator if applicable (only for integer part)
-    // Split into integer and decimal part
-    let [intPart, decPart] = value.split(",");
+    // Split into integer and decimal part (dot or comma as decimal separator)
+    let [intPart, decPart] = value.split(/[.,]/);
+
+    // Add Swedish thousand separator (space) to integer part
     intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
     return decPart !== undefined ? intPart + "," + decPart : intPart;
 }
+
