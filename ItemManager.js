@@ -549,69 +549,78 @@ createDeleteButton(cell, updateFilterCallback) {
     return newCategory;
   }
 
-  // Rendera kategori-dropdown för dataTable
-  renderCategoryDropdown(cell) {
-    if (!cell) {
-      console.error("Cell reference is invalid");
-      return document.createElement("div");
-    }
-    
-    const category = cell.getValue();
-    const select = document.createElement("select");
-    
-    // Hämta menytabellen för att få alla tillgängliga kategorier
-    const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (!menuTable) {
-      console.error("Menu table reference is invalid");
-      return select;
-    }
-    
-    menuTable.getData().forEach((row) => {
-      const option = document.createElement("option");
-      option.value = row.menu_category;
-      option.text = row.menu_category;
-      if (category === row.menu_category) {
-        option.selected = true;
-      }
-      select.appendChild(option);
-    });
-
-    select.addEventListener("change", (e) => {
-      const oldCategory = cell.getValue();
-      const newCategory = e.target.value;
-      
-      if (oldCategory === newCategory) return;
-
-      // Säkerhetskontroller
-      const row = cell.getRow();
-      if (!row) {
-        console.error("Row reference is invalid");
-        return;
-      }
-      
-      const rowData = row.getData();
-      if (!rowData) {
-        console.error("Unable to get row data");
-        return;
-      }
-
-      // Uppdatera först den globala data-arrayen
-      const dataIndex = this.data.findIndex(item => item.id === rowData.id);
-      if (dataIndex !== -1) {
-        this.data[dataIndex].item_category = newCategory;
-      }
-
-      // Uppdatera bara den påverkade raden
-      rowData.item_category = newCategory;
-      row.update(rowData);
-
-      // Uppdatera bara de påverkade kategorierna i menyn
-      this.updateCategoryInMenu(oldCategory);
-      this.updateCategoryInMenu(newCategory);
-    });
-    
+// Rendera kategori-dropdown för dataTable
+renderCategoryDropdown(cell) {
+  if (!cell) {
+    console.error("Cell reference is invalid");
+    return document.createElement("div");
+  }
+  
+  const category = cell.getValue();
+  const select = document.createElement("select");
+  
+  // Hämta menytabellen för att få alla tillgängliga kategorier
+  const menuTable = Tabulator.findTable("#menu-table")[0];
+  if (!menuTable) {
+    console.error("Menu table reference is invalid");
     return select;
   }
+  
+  menuTable.getData().forEach((row) => {
+    const option = document.createElement("option");
+    option.value = row.menu_category;
+    option.text = row.menu_category;
+    if (category === row.menu_category) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+
+  select.addEventListener("change", (e) => {
+    const oldCategory = cell.getValue();
+    const newCategory = e.target.value;
+    
+    if (oldCategory === newCategory) return;
+
+    // Säkerhetskontroller
+    const row = cell.getRow();
+    if (!row) {
+      console.error("Row reference is invalid");
+      return;
+    }
+    
+    const rowData = row.getData();
+    if (!rowData) {
+      console.error("Unable to get row data");
+      return;
+    }
+
+    console.log(`Changing category from "${oldCategory}" to "${newCategory}"`);
+
+    // Uppdatera först den globala data-arrayen
+    const dataIndex = this.data.findIndex(item => item.id === rowData.id);
+    if (dataIndex !== -1) {
+      this.data[dataIndex].item_category = newCategory;
+    }
+
+    // Uppdatera rowData
+    rowData.item_category = newCategory;
+    
+    // VIKTIGT: Uppdatera cellen direkt för att Tabulator ska känna till ändringen
+    cell.setValue(newCategory);
+    
+    // Uppdatera hela raden för att säkerställa att alla fält är synkroniserade
+    row.update(rowData);
+
+    // Uppdatera bara de påverkade kategorierna i menyn
+    this.updateCategoryInMenu(oldCategory);
+    this.updateCategoryInMenu(newCategory);
+    
+    console.log("Category change completed");
+  });
+  
+  return select;
+}
 
   // Återställ filter för meny
   resetMenuFilter() {
