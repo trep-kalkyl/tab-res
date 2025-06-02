@@ -22,18 +22,36 @@ class ItemManager {
   }
 
   // Skapa en knapp för att ta bort kategorier
-  createDeleteButton(cell, updateFilterCallback) {
-    const button = document.createElement("button");
-    button.innerHTML = "✖";
-    button.style.cursor = "pointer";
-    button.style.background = "none";
-    button.style.border = "none";
-    button.style.color = "#ff4444";
-    button.style.fontSize = "16px";
+// Skapa en knapp för att ta bort kategorier
+createDeleteButton(cell, updateFilterCallback) {
+  const button = document.createElement("button");
+  button.innerHTML = "✖";
+  button.style.cursor = "pointer";
+  button.style.background = "none";
+  button.style.border = "none";
+  button.style.color = "#ff4444";
+  button.style.fontSize = "16px";
 
-    button.addEventListener("click", () => {
-      // VIKTIGT: Hämta all nödvändig information innan någon operation utförs
-      // eftersom cell-referensen kan bli ogiltig efter borttagning
+  button.addEventListener("click", () => {
+    try {
+      // Hämta row-referensen direkt från cell
+      const row = cell.getRow();
+      if (!row) {
+        console.error("Row reference is invalid");
+        return;
+      }
+      
+      // Hämta data INNAN vi gör några ändringar
+      const rowData = row.getData();
+      if (!rowData) {
+        console.error("Unable to get row data");
+        return;
+      }
+      
+      const category = rowData.menu_category;
+      console.log("Attempting to delete category:", category);
+
+      // Hämta tabellreferenser
       const menuTable = Tabulator.findTable("#menu-table")[0];
       if (!menuTable) {
         console.error("Menu table reference is invalid");
@@ -45,25 +63,6 @@ class ItemManager {
         console.error("Data table reference is invalid");
         return;
       }
-
-      // Hämta data direkt från tabellen istället för genom cell-referensen
-      // Detta är säkrare än att använda cell.getRow()
-      const row = cell.getRow();
-      if (!row) {
-        console.error("Row reference is invalid");
-        return;
-      }
-      
-      // Viktigt - spara alla nödvändiga data INNAN vi gör någon ändring
-      const rowIndex = row.getIndex();
-      const rowData = row.getData();
-      if (!rowData) {
-        console.error("Unable to get row data");
-        return;
-      }
-      
-      const category = rowData.menu_category;
-      console.log("Attempting to delete category:", category);
 
       // Förhindra radering om det är den sista kategorin
       if (menuTable.getData().length <= 1) {
@@ -77,51 +76,51 @@ class ItemManager {
       );
 
       if (confirmDelete) {
+        console.log("User confirmed deletion");
+
+        // 1. Ta bort från allCategories FÖRST
+        this.allCategories.delete(category);
+        console.log("Category removed from allCategories");
+
+        // 2. Uppdatera den globala data-arrayen FÖRST
+        const itemsToDelete = this.data.filter(item => item.item_category === category);
+        this.data = this.data.filter(item => item.item_category !== category);
+        console.log(`Removed ${itemsToDelete.length} items from global data`);
+
+        // 3. Ta bort från dataTable - använd filter istället för deleteRow
+        // För att undvika "No matching row found" fel
+        const remainingDataTableRows = dataTable.getData().filter(item => item.item_category !== category);
+        dataTable.setData(remainingDataTableRows);
+        console.log("Updated data table");
+
+        // 4. Ta bort kategoriraden från menytabellen
+        // Använd row-objektet direkt istället för index
         try {
-          // Ta bort från allCategories
-          this.allCategories.delete(category);
-          console.log("Category removed from allCategories");
-          console.log("Remaining categories:", Array.from(this.allCategories));
-
-          // Samla information om påverkade rader först
-          const rowsToDelete = [];
-          dataTable.getRows().forEach(dataRow => {
-            const data = dataRow.getData();
-            if (data && data.item_category === category) {
-              rowsToDelete.push(dataRow.getIndex());
-            }
-          });
-
-          // Ta bort från den globala data-arrayen först
-          this.data = this.data.filter(item => item.item_category !== category);
-          console.log("Updated global data:", this.data);
-
-          // Ta bort rader från dataTable i omvänd ordning (från slutet)
-          // för att undvika problem med ändrade index
-          rowsToDelete.sort((a, b) => b - a).forEach(index => {
-            dataTable.deleteRow(index);
-          });
-
-          // Ta bort kategoriraden från menytabellen
-          // Använd det tidigare sparade indexet eftersom row-referensen kan vara ogiltig nu
-          menuTable.deleteRow(rowIndex);
-
-          // Uppdatera filtret för att spegla ändringar
-          // VIKTIGT: Nu använder vi inte cell eller row längre eftersom de kan vara ogiltiga
-          if (updateFilterCallback) {
-            updateFilterCallback();
-          }
-        } catch (error) {
-          console.error("Error during deletion:", error);
-          alert(
-            "An error occurred while deleting the category. Please check the console for details."
-          );
+          row.delete();
+          console.log("Menu row deleted successfully");
+        } catch (deleteError) {
+          console.error("Error deleting menu row:", deleteError);
+          // Fallback: använd setData för att återskapa tabellen utan den borttagna kategorin
+          const remainingMenuRows = menuTable.getData().filter(menuRow => menuRow.menu_category !== category);
+          menuTable.setData(remainingMenuRows);
+          console.log("Menu table recreated without deleted category");
         }
-      }
-    });
 
-    return button;
-  }
+        // 5. Uppdatera filtret
+        if (updateFilterCallback) {
+          updateFilterCallback();
+        }
+
+        console.log("Category deletion completed successfully");
+      }
+    } catch (error) {
+      console.error("Error during category deletion:", error);
+      alert("An error occurred while deleting the category. Please check the console for details.");
+    }
+  });
+
+  return button;
+}
 
   // Uppdatera totaler för en överordnad rad
   updateParentTotals(parentRow) {
