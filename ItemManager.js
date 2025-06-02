@@ -550,6 +550,9 @@ createDeleteButton(cell, updateFilterCallback) {
   }
 
 // Rendera kategori-dropdown för dataTable
+// Uppdaterad renderCategoryDropdown metod för ItemManager.js
+// Denna ersätter den befintliga metoden
+
 renderCategoryDropdown(cell) {
   if (!cell) {
     console.error("Cell reference is invalid");
@@ -558,6 +561,10 @@ renderCategoryDropdown(cell) {
   
   const category = cell.getValue();
   const select = document.createElement("select");
+  select.style.width = "100%";
+  select.style.height = "100%";
+  select.style.border = "none";
+  select.style.background = "transparent";
   
   // Hämta menytabellen för att få alla tillgängliga kategorier
   const menuTable = Tabulator.findTable("#menu-table")[0];
@@ -577,10 +584,14 @@ renderCategoryDropdown(cell) {
   });
 
   select.addEventListener("change", (e) => {
+    e.stopPropagation(); // Förhindra att eventet bubblar upp
+    
     const oldCategory = cell.getValue();
     const newCategory = e.target.value;
     
     if (oldCategory === newCategory) return;
+
+    console.log(`Changing category from "${oldCategory}" to "${newCategory}"`);
 
     // Säkerhetskontroller
     const row = cell.getRow();
@@ -595,28 +606,45 @@ renderCategoryDropdown(cell) {
       return;
     }
 
-    console.log(`Changing category from "${oldCategory}" to "${newCategory}"`);
-
     // Uppdatera först den globala data-arrayen
     const dataIndex = this.data.findIndex(item => item.id === rowData.id);
     if (dataIndex !== -1) {
       this.data[dataIndex].item_category = newCategory;
+      console.log("Updated global data for item:", rowData.id);
     }
 
     // Uppdatera rowData
     rowData.item_category = newCategory;
     
-    // VIKTIGT: Uppdatera cellen direkt för att Tabulator ska känna till ändringen
-    cell.setValue(newCategory);
-    
-    // Uppdatera hela raden för att säkerställa att alla fält är synkroniserade
-    row.update(rowData);
+    // KRITISKT: Uppdatera cellen och raden för att Tabulator ska känna till ändringen
+    try {
+      // Uppdatera cell-värdet direkt
+      cell.getElement().querySelector('select').value = newCategory;
+      
+      // Trigga Tabulator's interna uppdatering
+      row.update(rowData);
+      
+      // Force en re-render av cellen om nödvändigt
+      cell.getTable().redraw();
+      
+    } catch (updateError) {
+      console.error("Error updating cell/row:", updateError);
+    }
 
     // Uppdatera bara de påverkade kategorierna i menyn
     this.updateCategoryInMenu(oldCategory);
     this.updateCategoryInMenu(newCategory);
     
     console.log("Category change completed");
+  });
+
+  // Lägg till focus/blur handlers för bättre UX
+  select.addEventListener("focus", (e) => {
+    e.target.style.outline = "2px solid #007bff";
+  });
+  
+  select.addEventListener("blur", (e) => {
+    e.target.style.outline = "none";
   });
   
   return select;
