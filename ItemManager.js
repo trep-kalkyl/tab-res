@@ -422,55 +422,65 @@ updateCategoryInMenu(category) {
   }
 
   // Hantera kategoriändring i menytabellen
-  handleCategoryEdit(cell, updateFilterCallback, refreshCategoryDropdownsCallback) {
-    if (!cell) {
-      console.error("Cell reference is invalid");
-      return;
+// ERSÄTT handleCategoryEdit metoden i ItemManager.js (rad ~280-320)
+// med denna fixade version:
+
+handleCategoryEdit(cell, updateFilterCallback, refreshCategoryDropdownsCallback) {
+  if (!cell) {
+    console.error("Cell reference is invalid");
+    return;
+  }
+  
+  const oldCategory = cell.getOldValue();
+  const newCategory = cell.getValue();
+  
+  if (oldCategory === newCategory) return;
+
+  console.log(`Menu category change: "${oldCategory}" -> "${newCategory}"`);
+
+  // Uppdatera allCategories set
+  this.allCategories.delete(oldCategory);
+  this.allCategories.add(newCategory);
+
+  // Uppdatera den globala data-arrayen först
+  this.data.forEach(item => {
+    if (item.item_category === oldCategory) {
+      item.item_category = newCategory;
     }
+  });
+
+  // Uppdatera kategorinamn i alla påverkade artiklar
+  const dataTable = Tabulator.findTable("#data-table")[0];
+  if (!dataTable) {
+    console.error("Data table reference is invalid");
+    return;
+  }
+  
+  // Uppdatera data i tabellen med updateData istället för att iterera över rader
+  const updatedRows = dataTable.getData()
+    .filter(row => row.item_category === oldCategory)
+    .map(row => ({...row, item_category: newCategory}));
     
-    const oldCategory = cell.getOldValue();
-    const newCategory = cell.getValue();
-    
-    if (oldCategory === newCategory) return;
-
-    // Uppdatera allCategories set
-    this.allCategories.delete(oldCategory);
-    this.allCategories.add(newCategory);
-
-    // Uppdatera den globala data-arrayen först
-    this.data.forEach(item => {
-      if (item.item_category === oldCategory) {
-        item.item_category = newCategory;
-      }
-    });
-
-    // Uppdatera kategorinamn i alla påverkade artiklar
-    const dataTable = Tabulator.findTable("#data-table")[0];
-    if (!dataTable) {
-      console.error("Data table reference is invalid");
-      return;
-    }
-    
-    // Uppdatera data i tabellen med updateData istället för att iterera över rader
-    const updatedRows = dataTable.getData()
-      .filter(row => row.item_category === oldCategory)
-      .map(row => ({...row, item_category: newCategory}));
-      
-    if (updatedRows.length > 0) {
-      dataTable.updateData(updatedRows);
-    }
-
-    // Uppdatera filtret
-    if (updateFilterCallback) {
-      updateFilterCallback();
-    }
-
-    // Uppdatera rullgardinsmenyer i datatabellen
-    if (refreshCategoryDropdownsCallback) {
-      refreshCategoryDropdownsCallback();
-    }
+  if (updatedRows.length > 0) {
+    dataTable.updateData(updatedRows);
+    console.log(`Updated ${updatedRows.length} items with new category`);
   }
 
+  // INGEN KATEGORI-UPPDATERING BEHÖVS HÄR eftersom det redan är gjort i menyn
+  // och alla items redan har rätt kategori
+
+  // Uppdatera filtret
+  if (updateFilterCallback) {
+    updateFilterCallback();
+  }
+
+  // Uppdatera rullgardinsmenyer i datatabellen
+  if (refreshCategoryDropdownsCallback) {
+    refreshCategoryDropdownsCallback();
+  }
+  
+  console.log("Menu category edit completed");
+}
   // Uppdatera kvantitet för en artikel
   handleQuantityEdit(cell) {
     if (!cell) {
