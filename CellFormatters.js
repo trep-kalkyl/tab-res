@@ -903,11 +903,11 @@ export function svSE_faQuestionFormatter(cell) {
 }
 
 /**
- * svSE_toggleIconFormatter
+ * svSE_checkCrossToggleFormatter
  * Visar klickbara ikoner som växlar mellan check/cross
- * Används tillsammans med svSE_toggleCellClick för komplett funktionalitet
+ * Används tillsammans med svSE_checkCrossToggleClick för komplett funktionalitet
  */
-export function svSE_toggleIconFormatter(cell) {
+export function svSE_checkCrossToggleFormatter(cell) {
     const value = cell.getValue();
     const isSelected = Boolean(value);
     
@@ -917,13 +917,13 @@ export function svSE_toggleIconFormatter(cell) {
 }
 
 /**
- * svSE_toggleCellClick
+ * svSE_checkCrossToggleClick
  * Cellklick-hanterare för toggle-funktionalitet
- * Används tillsammans med svSE_toggleIconFormatter
+ * Används tillsammans med svSE_checkCrossToggleFormatter
  * 
  * @param {Function} callback - Callback-funktion att köra efter toggle (t.ex. updateFilter)
  */
-export function svSE_toggleCellClick(callback = null) {
+export function svSE_checkCrossToggleClick(callback = null) {
     return function(e, cell) {
         const currentValue = cell.getValue();
         cell.setValue(!Boolean(currentValue));
@@ -938,7 +938,7 @@ export function svSE_toggleCellClick(callback = null) {
 }
 
 /**
- * svSE_createToggleColumn
+ * svSE_createCheckCrossToggleColumn
  * Hjälpfunktion för att skapa en komplett toggle-kolumn
  * 
  * @param {string} title - Kolumnens titel
@@ -946,14 +946,14 @@ export function svSE_toggleCellClick(callback = null) {
  * @param {Function} onToggle - Callback-funktion som körs vid toggle
  * @returns {Object} Komplett kolumn-konfiguration
  */
-export function svSE_createToggleColumn(title, field, onToggle = null) {
+export function svSE_createCheckCrossToggleColumn(title, field, onToggle = null) {
     return {
         title: title,
         field: field,
-        formatter: svSE_toggleIconFormatter,
+        formatter: svSE_checkCrossToggleFormatter,
         headerSort: false,
         headerVertical: false,
-        cellClick: svSE_toggleCellClick(onToggle),
+        cellClick: svSE_checkCrossToggleClick(onToggle),
         width: 80, // Lämplig bredd för ikoner
         hozAlign: "center"
     };
