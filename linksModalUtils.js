@@ -7,7 +7,7 @@
  *   import linksModalUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@main/linksModalUtils.js";
  *   linksModalUtils.init();
  *   ...
- *   linksModalUtils.show(baseValue, itemType, materialName);
+ *   linksModalUtils.show(materialNumber, materialType, materialName);
  */
 const linksModalUtils = {
     init() {
@@ -25,9 +25,9 @@ const linksModalUtils = {
             if (e.key === 'Escape' && this.modal.style.display === 'flex') this.hide();
         });
     },
-    generateLinks(baseValue, itemType, materialName = '') {
-        // Use empty string if baseValue is missing or empty
-        const searchValue = baseValue || '';
+    generateLinks(materialNumber, materialType, materialName = '') {
+        // Use empty string if materialNumber is missing or empty
+        const searchValue = materialNumber || '';
         let links = [];
         
         switch(itemType) {
@@ -77,13 +77,13 @@ const linksModalUtils = {
         }
         return links;
     },
-    show(baseValue, itemType, materialName = '') {
+    show(materialNumber, materialType, materialName = '') {
         // Always show modal, even if data is missing
-        const displayValue = baseValue || '[No Value]';
-        const displayType = itemType || 'Unknown';
+        const displayValue = materialNumber || '[No Value]';
+        const displayType = materialType || 'Unknown';
         
         this.title.textContent = `Search Links for ${displayType}: ${displayValue}`;
-        const links = this.generateLinks(baseValue, itemType, materialName);
+        const links = this.generateLinks(materialNumber, materialType, materialName);
         this.linksContainer.innerHTML = links
             .map(link => `
                 <div class="tab-modal-link-item">
