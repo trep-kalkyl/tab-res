@@ -553,6 +553,9 @@ createDeleteButton(cell, updateFilterCallback) {
 // Uppdaterad renderCategoryDropdown metod för ItemManager.js
 // Denna ersätter den befintliga metoden
 
+// ERSÄTT hela renderCategoryDropdown metoden i ItemManager.js (rad ~320-430)
+// med denna fixade version:
+
 renderCategoryDropdown(cell) {
   if (!cell) {
     console.error("Cell reference is invalid");
@@ -586,7 +589,7 @@ renderCategoryDropdown(cell) {
   select.addEventListener("change", (e) => {
     e.stopPropagation(); // Förhindra att eventet bubblar upp
     
-    const oldCategory = cell.getValue();
+    const oldCategory = cell.getValue(); // VIKTIGT: Hämta INNAN vi uppdaterar
     const newCategory = e.target.value;
     
     if (oldCategory === newCategory) return;
@@ -606,7 +609,7 @@ renderCategoryDropdown(cell) {
       return;
     }
 
-    // Uppdatera först den globala data-arrayen
+    // KRITISKT: Uppdatera först den globala data-arrayen
     const dataIndex = this.data.findIndex(item => item.id === rowData.id);
     if (dataIndex !== -1) {
       this.data[dataIndex].item_category = newCategory;
@@ -631,8 +634,13 @@ renderCategoryDropdown(cell) {
       console.error("Error updating cell/row:", updateError);
     }
 
-    // Uppdatera bara de påverkade kategorierna i menyn
+    // FIXAT: Uppdatera BÅDA kategorierna i RÄTT ORDNING
+    // Först den gamla kategorin (som nu har förlorat ett item)
+    console.log("Updating old category:", oldCategory);
     this.updateCategoryInMenu(oldCategory);
+    
+    // Sedan den nya kategorin (som nu har fått ett item)  
+    console.log("Updating new category:", newCategory);
     this.updateCategoryInMenu(newCategory);
     
     console.log("Category change completed");
