@@ -230,3 +230,191 @@ export function svSE_preserveRawNumberFormatter(cell) {
     // Wrap negative numbers in a span with red color
     return svSE_redIfNegative((isNegative ? "-" : "") + value, isNegative);
 }
+
+/**
+ * Swedish Tabulator Symbol Formatters
+ * Utökning till CellFormatters.js med symboler och indikatorer
+ */
+
+/**
+ * svSE_checkMarkFormatter
+ * Visar ✓ för true/truthy värden, annars tom cell
+ */
+export function svSE_checkMarkFormatter(cell) {
+    const value = cell.getValue();
+    return value ? "✓" : "";
+}
+
+/**
+ * svSE_crossMarkFormatter
+ * Visar ✗ för true/truthy värden, annars tom cell
+ */
+export function svSE_crossMarkFormatter(cell) {
+    const value = cell.getValue();
+    return value ? "✗" : "";
+}
+
+/**
+ * svSE_plusMinusFormatter
+ * Visar + för positiva värden, - för negativa, 0 för noll
+ */
+export function svSE_plusMinusFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "-";
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+    if (num > 0) return "+";
+    if (num < 0) return "-";
+    return "0";
+}
+
+/**
+ * svSE_thumbsFormatter
+ * Visar 👍 för true/positiva värden, 👎 för false/negativa
+ */
+export function svSE_thumbsFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "";
+    
+    // Boolean check
+    if (typeof value === "boolean") {
+        return value ? "👍" : "👎";
+    }
+    
+    // Number check
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+        return num >= 0 ? "👍" : "👎";
+    }
+    
+    // String check for ja/nej, yes/no, sant/falskt
+    const str = value.toString().toLowerCase();
+    if (["ja", "yes", "sant", "true", "1"].includes(str)) return "👍";
+    if (["nej", "no", "falskt", "false", "0"].includes(str)) return "👎";
+    
+    return value;
+}
+
+/**
+ * svSE_statusDotFormatter
+ * Visar färgade prickar baserat på status
+ * Grön för positiv/aktiv, röd för negativ/inaktiv, gul för neutral/väntande
+ */
+export function svSE_statusDotFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "";
+    
+    const str = value.toString().toLowerCase();
+    
+    // Svenska statusord
+    if (["aktiv", "godkänd", "klar", "ja", "sant", "ok"].includes(str)) {
+        return '<span style="color: #22c55e; font-size: 20px;">●</span>';
+    }
+    if (["inaktiv", "avvisad", "fel", "nej", "falskt", "error"].includes(str)) {
+        return '<span style="color: #ef4444; font-size: 20px;">●</span>';
+    }
+    if (["väntande", "pågående", "under granskning", "pending"].includes(str)) {
+        return '<span style="color: #f59e0b; font-size: 20px;">●</span>';
+    }
+    
+    // Numeriska värden
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+        if (num > 0) return '<span style="color: #22c55e; font-size: 20px;">●</span>';
+        if (num < 0) return '<span style="color: #ef4444; font-size: 20px;">●</span>';
+        return '<span style="color: #6b7280; font-size: 20px;">●</span>';
+    }
+    
+    return value;
+}
+
+/**
+ * svSE_priorityFormatter
+ * Visar prioritet med pilar: ↑↑↑ (hög), ↑↑ (medium-hög), ↑ (medium), ↓ (låg)
+ */
+export function svSE_priorityFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "";
+    
+    const str = value.toString().toLowerCase();
+    
+    if (["kritisk", "mycket hög", "5"].includes(str)) {
+        return '<span style="color: #dc2626;">↑↑↑</span>';
+    }
+    if (["hög", "4"].includes(str)) {
+        return '<span style="color: #ea580c;">↑↑</span>';
+    }
+    if (["medium", "normal", "3"].includes(str)) {
+        return '<span style="color: #ca8a04;">↑</span>';
+    }
+    if (["låg", "2"].includes(str)) {
+        return '<span style="color: #16a34a;">↓</span>';
+    }
+    if (["mycket låg", "1"].includes(str)) {
+        return '<span style="color: #059669;">↓↓</span>';
+    }
+    
+    return value;
+}
+
+/**
+ * svSE_yesNoFormatter
+ * Konverterar boolean/string till svenska Ja/Nej
+ */
+export function svSE_yesNoFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "-";
+    
+    if (typeof value === "boolean") {
+        return value ? "Ja" : "Nej";
+    }
+    
+    const str = value.toString().toLowerCase();
+    if (["true", "1", "ja", "yes", "sant"].includes(str)) return "Ja";
+    if (["false", "0", "nej", "no", "falskt"].includes(str)) return "Nej";
+    
+    return value;
+}
+
+/**
+ * svSE_trafficLightFormatter
+ * Trafikljus-formatter: 🔴 🟡 🟢
+ */
+export function svSE_trafficLightFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "";
+    
+    const str = value.toString().toLowerCase();
+    
+    if (["röd", "stopp", "fel", "dåligt", "red", "stop", "bad"].includes(str)) return "🔴";
+    if (["gul", "gult", "varning", "väntande", "yellow", "warning", "pending"].includes(str)) return "🟡";
+    if (["grön", "grönt", "ok", "bra", "klar", "green", "good", "ready"].includes(str)) return "🟢";
+    
+    // Numeriska värden (0-2 skala)
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+        if (num <= 0.33) return "🔴";
+        if (num <= 0.66) return "🟡";
+        if (num <= 1) return "🟢";
+    }
+    
+    return value;
+}
+
+/**
+ * svSE_starRatingFormatter
+ * Visar stjärnbetyg baserat på numeriskt värde (1-5)
+ */
+export function svSE_starRatingFormatter(cell) {
+    const value = cell.getValue();
+    if (value === null || value === undefined || value === "") return "";
+    
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+    
+    const rating = Math.max(0, Math.min(5, Math.round(num)));
+    const fullStars = "★".repeat(rating);
+    const emptyStars = "☆".repeat(5 - rating);
+    
+    return `<span style="color: #fbbf24;">${fullStars}</span><span style="color: #d1d5db;">${emptyStars}</span>`;
+}
