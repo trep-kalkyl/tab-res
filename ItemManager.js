@@ -152,33 +152,49 @@ createDeleteButton(cell, updateFilterCallback) {
   }
 
   // Uppdatera en kategori i menytabellen
-  updateCategoryInMenu(category) {
-    if (!category) return;
-    
-    // Beräkna kategorins totaler
-    const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
-    
-    // Hitta och uppdatera endast den påverkade kategoriraden
-    const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (!menuTable) {
-      console.error("Menu table reference is invalid");
-      return;
-    }
-    
-    // Använd getRows() med försiktighet - kontrollera att tabellen finns och har data
-    const menuData = menuTable.getData();
-    const categoryRowIndex = menuData.findIndex(row => row.menu_category === category);
-    
-    if (categoryRowIndex !== -1) {
-      const rowData = menuData[categoryRowIndex];
-      // Uppdatera tabellen med nya värden
-      menuTable.updateData([{
-        ...rowData,
-        category_material_user_price_total: categoryTotal.category_material_user_price_total,
-        category_work_task_duration_total: categoryTotal.category_work_task_duration_total
-      }]);
-    }
+// ERSÄTT updateCategoryInMenu metoden i ItemManager.js (rad ~115-140)
+// med denna fixade version:
+
+updateCategoryInMenu(category) {
+  if (!category) return;
+  
+  // Beräkna kategorins totaler FRÅN SCRATCH baserat på aktuell data
+  const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
+  
+  // Hitta och uppdatera endast den påverkade kategoriraden
+  const menuTable = Tabulator.findTable("#menu-table")[0];
+  if (!menuTable) {
+    console.error("Menu table reference is invalid");
+    return;
   }
+  
+  // VIKTIGT: Använd updateData istället för att manipulera rader direkt
+  const menuData = menuTable.getData();
+  const categoryRowIndex = menuData.findIndex(row => row.menu_category === category);
+  
+  if (categoryRowIndex !== -1) {
+    const rowData = menuData[categoryRowIndex];
+    
+    // Skapa uppdaterat data-objekt
+    const updatedRow = {
+      ...rowData,
+      category_material_user_price_total: categoryTotal.category_material_user_price_total,
+      category_work_task_duration_total: categoryTotal.category_work_task_duration_total
+    };
+    
+    console.log(`Updating menu category "${category}":`, {
+      old_price: rowData.category_material_user_price_total,
+      new_price: categoryTotal.category_material_user_price_total,
+      old_duration: rowData.category_work_task_duration_total,
+      new_duration: categoryTotal.category_work_task_duration_total
+    });
+    
+    // Uppdatera tabellen med nya värden
+    menuTable.updateData([updatedRow]);
+  } else {
+    console.warn(`Category "${category}" not found in menu table`);
+  }
+}
 
   // Uppdatera beräkningar i en underordnad tabell
   updateCalculations(cell) {
