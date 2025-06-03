@@ -785,31 +785,28 @@ export function svSE_checkCrossToggleClick(callback = null) {
 }
 
 /**
- * Skapar en raderingsknapp för en rad i en Tabulator-tabell.
- * Tar bort raden och relaterade data om användaren bekräftar.
+ * Visar en röd papperskorgsikon (Font Awesome) som kan klickas för att radera en rad i menyn.
+ * Kör raderingslogik för kategori och relaterade poster.
  *
  * @param {Tabulator.CellComponent} cell - Cellkomponenten
  * @param {Set} allCategories - Set med alla kategorier
  * @param {Tabulator} dataTable - Tabellen med items
  * @param {Array} data - Global data-array
  * @param {Function} updateFilter - Funktion för att uppdatera filter
- * @returns {HTMLElement} - Knappen som skapats
+ * @returns {HTMLElement} - Div med ikon och klick-event
  */
-export function svSE_deleteButtonFormatter(
+export function svSE_deleteButtonFormatterInMenu(
   cell,
   allCategories,
   dataTable,
   data,
   updateFilter
 ) {
-  const button = document.createElement("button");
-  button.innerHTML = "✖";
-  button.style.cursor = "pointer";
-  button.style.background = "none";
-  button.style.border = "none";
-  button.style.color = "#ff4444";
-  button.style.fontSize = "16px";
-  button.addEventListener("click", (e) => {
+  const div = document.createElement("div");
+  div.style.cursor = "pointer";
+  div.style.display = "inline-block";
+  div.innerHTML = '<i class="fa fa-trash" style="color: #dc2626; font-size: 16px;"></i>';
+  div.addEventListener("click", (e) => {
     e.stopPropagation();
     const category = cell.getRow().getData().menu_category;
     console.log("Attempting to delete category:", category);
@@ -844,6 +841,7 @@ export function svSE_deleteButtonFormatter(
       }
     }
   });
-  return button;
+  return div;
 }
+
 
