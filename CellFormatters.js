@@ -759,8 +759,8 @@ export function svSE_checkCrossToggleFormatter(cell) {
     const isSelected = Boolean(value);
     
     return isSelected 
-        ? "<i class='fa fa-check text-success'></i>" 
-        : "<i class='fa fa-times text-muted'></i>";
+        ? "<i class='fa fa-eye text-success'></i>" 
+        : "<i class='fa fa-eye-slash text-muted'></i>";
 }
 
 /**
@@ -784,24 +784,4 @@ export function svSE_checkCrossToggleClick(callback = null) {
     };
 }
 
-/**
- * svSE_createCheckCrossToggleColumn
- * Hjälpfunktion för att skapa en komplett toggle-kolumn
- * 
- * @param {string} title - Kolumnens titel
- * @param {string} field - Fältnamn
- * @param {Function} onToggle - Callback-funktion som körs vid toggle
- * @returns {Object} Komplett kolumn-konfiguration
- */
-export function svSE_createCheckCrossToggleColumn(title, field, onToggle = null) {
-    return {
-        title: title,
-        field: field,
-        formatter: svSE_checkCrossToggleFormatter,
-        headerSort: false,
-        headerVertical: false,
-        cellClick: svSE_checkCrossToggleClick(onToggle),
-        width: 80, // Lämplig bredd för ikoner
-        hozAlign: "center"
-    };
-}
+
