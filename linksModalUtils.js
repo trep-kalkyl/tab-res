@@ -30,7 +30,7 @@ const linksModalUtils = {
         const searchValue = materialNumber || '';
         let links = [];
         
-        switch(itemType) {
+        switch(materialType) {
             case "SV-ENR":
                 links = [
                     { name: "Google Type 1", url: `https://www.google.com/search?q=${searchValue}&type=1` },
