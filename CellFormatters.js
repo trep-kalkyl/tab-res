@@ -565,3 +565,339 @@ export function svSE_faEditFormatter(cell) {
 export function svSE_faTrashFormatter(cell) {
     return '<i class="fa fa-trash" style="color: #dc2626; font-size: 16px;"></i>';
 }
+/**
+ * Enkla FontAwesome Ikon Formatters för Tabulator
+ * Kräver FontAwesome 4.7.0+ 
+ * <link rel="stylesheet" type="text/css" href="https://unpkg.com/font-awesome@4.7.0/css/font-awesome.min.css">
+ * 
+ * Användning: Sätt bara formatter på kolumnen, ingen logik - bara ikonen
+ */
+
+/**
+ * Visar grön plus-ikon
+ */
+export function svSE_faPlusFormatter(cell) {
+    return '<i class="fa fa-plus" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd minus-ikon
+ */
+export function svSE_faMinusFormatter(cell) {
+    return '<i class="fa fa-minus" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön plus-circle ikon
+ */
+export function svSE_faPlusCircleFormatter(cell) {
+    return '<i class="fa fa-plus-circle" style="color: #16a34a; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar röd minus-circle ikon
+ */
+export function svSE_faMinusCircleFormatter(cell) {
+    return '<i class="fa fa-minus-circle" style="color: #dc2626; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar grön plus-square ikon
+ */
+export function svSE_faPlusSquareFormatter(cell) {
+    return '<i class="fa fa-plus-square" style="color: #16a34a; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar röd minus-square ikon
+ */
+export function svSE_faMinusSquareFormatter(cell) {
+    return '<i class="fa fa-minus-square" style="color: #dc2626; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar grön cart-plus ikon
+ */
+export function svSE_faCartPlusFormatter(cell) {
+    return '<i class="fa fa-cart-plus" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd cart-arrow-down ikon
+ */
+export function svSE_faCartMinusFormatter(cell) {
+    return '<i class="fa fa-cart-arrow-down" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön user-plus ikon
+ */
+export function svSE_faUserPlusFormatter(cell) {
+    return '<i class="fa fa-user-plus" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd user-minus ikon (user-times i FA4)
+ */
+export function svSE_faUserMinusFormatter(cell) {
+    return '<i class="fa fa-user-times" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön arrow-up ikon
+ */
+export function svSE_faArrowUpFormatter(cell) {
+    return '<i class="fa fa-arrow-up" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd arrow-down ikon
+ */
+export function svSE_faArrowDownFormatter(cell) {
+    return '<i class="fa fa-arrow-down" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön thumbs-up ikon
+ */
+export function svSE_faThumbsUpFormatter(cell) {
+    return '<i class="fa fa-thumbs-up" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd thumbs-down ikon
+ */
+export function svSE_faThumbsDownFormatter(cell) {
+    return '<i class="fa fa-thumbs-down" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön check ikon
+ */
+export function svSE_faCheckFormatter(cell) {
+    return '<i class="fa fa-check" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd times ikon
+ */
+export function svSE_faTimesFormatter(cell) {
+    return '<i class="fa fa-times" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön toggle-on ikon
+ */
+export function svSE_faToggleOnFormatter(cell) {
+    return '<i class="fa fa-toggle-on" style="color: #16a34a; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar grå toggle-off ikon
+ */
+export function svSE_faToggleOffFormatter(cell) {
+    return '<i class="fa fa-toggle-off" style="color: #6b7280; font-size: 18px;"></i>';
+}
+
+/**
+ * Visar neutral edit ikon
+ */
+export function svSE_faEditFormatter(cell) {
+    return '<i class="fa fa-edit" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd papperkorg ikon
+ */
+export function svSE_faTrashFormatter(cell) {
+    return '<i class="fa fa-trash" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd papperkorg-o ikon (outline)
+ */
+export function svSE_faTrashOFormatter(cell) {
+    return '<i class="fa fa-trash-o" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå info-circle ikon
+ */
+export function svSE_faInfoFormatter(cell) {
+    return '<i class="fa fa-info-circle" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön download ikon
+ */
+export function svSE_faDownloadFormatter(cell) {
+    return '<i class="fa fa-download" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå upload ikon
+ */
+export function svSE_faUploadFormatter(cell) {
+    return '<i class="fa fa-upload" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå copy ikon
+ */
+export function svSE_faCopyFormatter(cell) {
+    return '<i class="fa fa-copy" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar orange warning ikon
+ */
+export function svSE_faWarningFormatter(cell) {
+    return '<i class="fa fa-warning" style="color: #f59e0b; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd ban ikon (förbjuden)
+ */
+export function svSE_faBanFormatter(cell) {
+    return '<i class="fa fa-ban" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå external-link ikon
+ */
+export function svSE_faLinkFormatter(cell) {
+    return '<i class="fa fa-external-link" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön save ikon
+ */
+export function svSE_faSaveFormatter(cell) {
+    return '<i class="fa fa-save" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå undo ikon
+ */
+export function svSE_faUndoFormatter(cell) {
+    return '<i class="fa fa-undo" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå redo ikon
+ */
+export function svSE_faRedoFormatter(cell) {
+    return '<i class="fa fa-redo" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå refresh ikon
+ */
+export function svSE_faRefreshFormatter(cell) {
+    return '<i class="fa fa-refresh" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå search ikon
+ */
+export function svSE_faSearchFormatter(cell) {
+    return '<i class="fa fa-search" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå filter ikon
+ */
+export function svSE_faFilterFormatter(cell) {
+    return '<i class="fa fa-filter" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå sort-up ikon
+ */
+export function svSE_faSortUpFormatter(cell) {
+    return '<i class="fa fa-sort-up" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå sort-down ikon
+ */
+export function svSE_faSortDownFormatter(cell) {
+    return '<i class="fa fa-sort-down" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå cog ikon (inställningar)
+ */
+export function svSE_faCogFormatter(cell) {
+    return '<i class="fa fa-cog" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå eye ikon (visa)
+ */
+export function svSE_faEyeFormatter(cell) {
+    return '<i class="fa fa-eye" style="color: #3b82f6; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå eye-slash ikon (dölj)
+ */
+export function svSE_faEyeSlashFormatter(cell) {
+    return '<i class="fa fa-eye-slash" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar gul star ikon (fylld)
+ */
+export function svSE_faStarFormatter(cell) {
+    return '<i class="fa fa-star" style="color: #fbbf24; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå star-o ikon (tom)
+ */
+export function svSE_faStarOFormatter(cell) {
+    return '<i class="fa fa-star-o" style="color: #d1d5db; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd heart ikon
+ */
+export function svSE_faHeartFormatter(cell) {
+    return '<i class="fa fa-heart" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grå heart-o ikon
+ */
+export function svSE_faHeartOFormatter(cell) {
+    return '<i class="fa fa-heart-o" style="color: #6b7280; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar grön check-circle ikon
+ */
+export function svSE_faCheckCircleFormatter(cell) {
+    return '<i class="fa fa-check-circle" style="color: #16a34a; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar röd times-circle ikon
+ */
+export function svSE_faTimesCircleFormatter(cell) {
+    return '<i class="fa fa-times-circle" style="color: #dc2626; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar orange exclamation-triangle ikon
+ */
+export function svSE_faExclamationFormatter(cell) {
+    return '<i class="fa fa-exclamation-triangle" style="color: #f59e0b; font-size: 16px;"></i>';
+}
+
+/**
+ * Visar blå question-circle ikon
+ */
+export function svSE_faQuestionFormatter(cell) {
+    return '<i class="fa fa-question-circle" style="color: #3b82f6; font-size: 16px;"></i>';
+}
