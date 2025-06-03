@@ -784,4 +784,66 @@ export function svSE_checkCrossToggleClick(callback = null) {
     };
 }
 
+/**
+ * Skapar en raderingsknapp för en rad i en Tabulator-tabell.
+ * Tar bort raden och relaterade data om användaren bekräftar.
+ *
+ * @param {Tabulator.CellComponent} cell - Cellkomponenten
+ * @param {Set} allCategories - Set med alla kategorier
+ * @param {Tabulator} dataTable - Tabellen med items
+ * @param {Array} data - Global data-array
+ * @param {Function} updateFilter - Funktion för att uppdatera filter
+ * @returns {HTMLElement} - Knappen som skapats
+ */
+export function svSE_deleteButtonFormatter(
+  cell,
+  allCategories,
+  dataTable,
+  data,
+  updateFilter
+) {
+  const button = document.createElement("button");
+  button.innerHTML = "✖";
+  button.style.cursor = "pointer";
+  button.style.background = "none";
+  button.style.border = "none";
+  button.style.color = "#ff4444";
+  button.style.fontSize = "16px";
+  button.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const category = cell.getRow().getData().menu_category;
+    console.log("Attempting to delete category:", category);
+    if (cell.getTable().getData().length <= 1) {
+      alert("At least one category must remain.");
+      return;
+    }
+    const confirmDelete = confirm(
+      `Are you sure you want to delete the category "${category}" and all its items?`
+    );
+    if (confirmDelete) {
+      try {
+        allCategories.delete(category);
+        const rowsToDelete = dataTable
+          .getRows()
+          .filter((row) => row.getData().item_category === category);
+        rowsToDelete.forEach((row) => row.delete());
+        const itemsToRemoveIndexes = [];
+        data.forEach((item, index) => {
+          if (item.item_category === category) {
+            itemsToRemoveIndexes.unshift(index);
+          }
+        });
+        itemsToRemoveIndexes.forEach((index) => data.splice(index, 1));
+        cell.getRow().delete();
+        updateFilter();
+      } catch (error) {
+        console.error("Error during deletion:", error);
+        alert(
+          "An error occurred while deleting the category. Please check the console for details."
+        );
+      }
+    }
+  });
+  return button;
+}
 
