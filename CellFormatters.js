@@ -901,3 +901,60 @@ export function svSE_faExclamationFormatter(cell) {
 export function svSE_faQuestionFormatter(cell) {
     return '<i class="fa fa-question-circle" style="color: #3b82f6; font-size: 16px;"></i>';
 }
+
+/**
+ * svSE_toggleIconFormatter
+ * Visar klickbara ikoner som växlar mellan check/cross
+ * Används tillsammans med svSE_toggleCellClick för komplett funktionalitet
+ */
+export function svSE_toggleIconFormatter(cell) {
+    const value = cell.getValue();
+    const isSelected = Boolean(value);
+    
+    return isSelected 
+        ? "<i class='fa fa-check text-success'></i>" 
+        : "<i class='fa fa-times text-muted'></i>";
+}
+
+/**
+ * svSE_toggleCellClick
+ * Cellklick-hanterare för toggle-funktionalitet
+ * Används tillsammans med svSE_toggleIconFormatter
+ * 
+ * @param {Function} callback - Callback-funktion att köra efter toggle (t.ex. updateFilter)
+ */
+export function svSE_toggleCellClick(callback = null) {
+    return function(e, cell) {
+        const currentValue = cell.getValue();
+        cell.setValue(!Boolean(currentValue));
+        
+        // Kör callback om den finns
+        if (callback && typeof callback === 'function') {
+            callback();
+        }
+        
+        e.stopPropagation();
+    };
+}
+
+/**
+ * svSE_createToggleColumn
+ * Hjälpfunktion för att skapa en komplett toggle-kolumn
+ * 
+ * @param {string} title - Kolumnens titel
+ * @param {string} field - Fältnamn
+ * @param {Function} onToggle - Callback-funktion som körs vid toggle
+ * @returns {Object} Komplett kolumn-konfiguration
+ */
+export function svSE_createToggleColumn(title, field, onToggle = null) {
+    return {
+        title: title,
+        field: field,
+        formatter: svSE_toggleIconFormatter,
+        headerSort: false,
+        headerVertical: false,
+        cellClick: svSE_toggleCellClick(onToggle),
+        width: 80, // Lämplig bredd för ikoner
+        hozAlign: "center"
+    };
+}
