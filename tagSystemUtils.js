@@ -8,7 +8,7 @@ class TagSystemUtils {
     this.debugMode = false;
     this.currentFilter = [];
     this.filterLogic = 'AND'; // 'AND' eller 'OR'
-    this.table = null;
+    this.table = dataTable;
     
     // KONFIGURATION FÖR TOGGLE-KNAPPEN
     this.toggleConfig = {
