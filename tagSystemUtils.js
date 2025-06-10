@@ -130,266 +130,292 @@ class TagSystemUtils {
   /**
    * Editor: lägga till/ta bort taggar med dropdown för befintliga taggar
    */
-  tagEditor(cell, onRendered, success, cancel) {
-    const container = document.createElement("div");
-    container.className = "tag-editor-container";
+tagEditor(cell, onRendered, success, cancel) {
+  const container = document.createElement("div");
+  container.className = "tag-editor-container";
 
-    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
-    const originalTags = [...currentTags];
+  let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
+  const originalTags = [...currentTags];
 
-    const tagContainer = document.createElement("div");
-    tagContainer.className = "tag-display-container";
-    container.appendChild(tagContainer);
+  const tagContainer = document.createElement("div");
+  tagContainer.className = "tag-display-container";
+  container.appendChild(tagContainer);
 
-    const inputContainer = document.createElement("div");
-    inputContainer.className = "input-group mt-2 position-relative";
-    container.appendChild(inputContainer);
+  const inputContainer = document.createElement("div");
+  inputContainer.className = "input-group mt-2 position-relative";
+  container.appendChild(inputContainer);
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "form-control";
-    input.placeholder = "Lägg till tagg...";
-    inputContainer.appendChild(input);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "form-control";
+  input.placeholder = "Lägg till tagg...";
+  inputContainer.appendChild(input);
 
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn btn-primary";
-    button.textContent = "Lägg till";
-    inputContainer.appendChild(button);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn-primary";
+  button.textContent = "Lägg till";
+  inputContainer.appendChild(button);
 
-    // Dropdown för befintliga taggar
-    const dropdown = document.createElement("div");
-    dropdown.className = "tag-suggestions-dropdown";
-    dropdown.style.cssText = `
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 40px;
-      background: white;
-      border: 1px solid #ddd;
-      border-top: none;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 1000;
-      display: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    `;
-    inputContainer.appendChild(dropdown);
+  // Dropdown för befintliga taggar
+  const dropdown = document.createElement("div");
+  dropdown.className = "tag-suggestions-dropdown";
+  dropdown.style.cssText = `
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 40px;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  `;
+  inputContainer.appendChild(dropdown);
 
-    // Hämta alla befintliga taggar från tabellen
-    const getAllExistingTags = () => {
-      const allTags = new Set();
-      this.table.getData().forEach(row => {
+  // FIXAD - Säker hämtning av befintliga taggar
+  const getAllExistingTags = () => {
+    const allTags = new Set();
+    
+    // Kontrollera att table finns och är initialiserad
+    if (!this.table || typeof this.table.getData !== 'function') {
+      console.warn('Tabulator-instansen är inte tillgänglig');
+      return [];
+    }
+    
+    try {
+      const tableData = this.table.getData();
+      if (!Array.isArray(tableData)) {
+        console.warn('Table data är inte en array');
+        return [];
+      }
+      
+      tableData.forEach(row => {
         if (Array.isArray(row.tags)) {
           row.tags.forEach(tag => allTags.add(tag));
         }
       });
-      return Array.from(allTags).sort();
-    };
+    } catch (error) {
+      console.error('Fel vid hämtning av tabelldata:', error);
+      return [];
+    }
+    
+    return Array.from(allTags).sort();
+  };
 
-    // Uppdatera dropdown baserat på input
-    const updateDropdown = (searchText = '') => {
-      const existingTags = getAllExistingTags();
-      const filteredTags = existingTags.filter(tag => 
-        !currentTags.includes(tag) && 
-        tag.toLowerCase().includes(searchText.toLowerCase())
-      );
+  // Uppdatera dropdown baserat på input
+  const updateDropdown = (searchText = '') => {
+    const existingTags = getAllExistingTags();
+    const filteredTags = existingTags.filter(tag => 
+      !currentTags.includes(tag) && 
+      tag.toLowerCase().includes(searchText.toLowerCase())
+    );
 
-      dropdown.innerHTML = '';
-      
-      if (filteredTags.length === 0 || searchText === '') {
-        dropdown.style.display = 'none';
-        return;
-      }
-
-      filteredTags.slice(0, 10).forEach(tag => { // Begränsa till 10 förslag
-        const option = document.createElement("div");
-        option.className = "tag-suggestion-option";
-        option.style.cssText = `
-          padding: 8px 12px;
-          cursor: pointer;
-          border-bottom: 1px solid #eee;
-          transition: background-color 0.2s;
-        `;
-        option.textContent = tag;
-        
-        option.addEventListener('mouseenter', () => {
-          option.style.backgroundColor = '#f8f9fa';
-        });
-        
-        option.addEventListener('mouseleave', () => {
-          option.style.backgroundColor = 'transparent';
-        });
-        
-        option.addEventListener('click', (e) => {
-          e.stopPropagation();
-          addTag(tag);
-          input.value = '';
-          dropdown.style.display = 'none';
-          input.focus();
-        });
-        
-        dropdown.appendChild(option);
-      });
-      
-      dropdown.style.display = 'block';
-    };
-
-    // Lyssna på input-ändringar
-    input.addEventListener('input', (e) => {
-      updateDropdown(e.target.value);
-    });
-
-    // Lyssna på focus för att visa dropdown
-    input.addEventListener('focus', (e) => {
-      if (e.target.value) {
-        updateDropdown(e.target.value);
-      }
-    });
-
-    // Dölj dropdown när man klickar utanför
-    document.addEventListener('click', (e) => {
-      if (!inputContainer.contains(e.target)) {
-        dropdown.style.display = 'none';
-      }
-    });
-
-    // Hantera piltangenter för navigation i dropdown
-    input.addEventListener('keydown', (e) => {
-      const options = dropdown.querySelectorAll('.tag-suggestion-option');
-      
-      if (e.key === 'ArrowDown' && options.length > 0) {
-        e.preventDefault();
-        const activeOption = dropdown.querySelector('.active') || options[0];
-        const currentIndex = Array.from(options).indexOf(activeOption);
-        const nextIndex = Math.min(currentIndex + 1, options.length - 1);
-        
-        options.forEach(opt => opt.classList.remove('active'));
-        options[nextIndex].classList.add('active');
-        options[nextIndex].style.backgroundColor = '#007bff';
-        options[nextIndex].style.color = 'white';
-      }
-      
-      if (e.key === 'ArrowUp' && options.length > 0) {
-        e.preventDefault();
-        const activeOption = dropdown.querySelector('.active');
-        if (activeOption) {
-          const currentIndex = Array.from(options).indexOf(activeOption);
-          const prevIndex = Math.max(currentIndex - 1, 0);
-          
-          options.forEach(opt => {
-            opt.classList.remove('active');
-            opt.style.backgroundColor = 'transparent';
-            opt.style.color = 'inherit';
-          });
-          options[prevIndex].classList.add('active');
-          options[prevIndex].style.backgroundColor = '#007bff';
-          options[prevIndex].style.color = 'white';
-        }
-      }
-      
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const activeOption = dropdown.querySelector('.active');
-        if (activeOption) {
-          addTag(activeOption.textContent);
-          input.value = '';
-          dropdown.style.display = 'none';
-        } else {
-          addTag(input.value.trim());
-          input.value = '';
-          dropdown.style.display = 'none';
-        }
-      }
-      
-      if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
-        input.blur();
-      }
-    });
-
-    const addTag = (tag) => {
-      if (tag && !currentTags.includes(tag)) {
-        currentTags.push(tag);
-        updateTagDisplay();
-      }
-    };
-
-    const removeTag = (tag) => {
-      const idx = currentTags.indexOf(tag);
-      if (idx > -1) {
-        currentTags.splice(idx, 1);
-        updateTagDisplay();
-      }
-    };
-
-    const updateTagDisplay = () => {
-      tagContainer.innerHTML = "";
-
-      if (currentTags.length === 0) {
-        const emptyMessage = document.createElement("div");
-        emptyMessage.className = "text-muted small p-2";
-        emptyMessage.textContent = "Inga taggar tillagda";
-        tagContainer.appendChild(emptyMessage);
-        return;
-      }
-
-      currentTags.forEach((tag) => {
-        const tagElement = document.createElement("div");
-        tagElement.className = "tag-badge d-inline-flex align-items-center";
-
-        const tagText = document.createElement("span");
-        tagText.textContent = tag;
-        tagElement.appendChild(tagText);
-
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "btn-close btn-close-white ms-1 remove-tag-btn";
-        removeButton.setAttribute("data-tag", tag);
-        removeButton.setAttribute("tabindex", "-1");
-        removeButton.setAttribute("aria-label", "Ta bort");
-        removeButton.addEventListener("click", function (e) {
-          e.stopPropagation();
-          removeTag(tag);
-        });
-
-        tagElement.appendChild(removeButton);
-        tagContainer.appendChild(tagElement);
-      });
-    };
-
-    updateTagDisplay();
-
-    button.addEventListener("click", function () {
-      addTag(input.value.trim());
-      input.value = "";
+    dropdown.innerHTML = '';
+    
+    if (filteredTags.length === 0 || searchText === '') {
       dropdown.style.display = 'none';
-      input.focus();
-    });
+      return;
+    }
 
-    container.addEventListener("focusout", function (e) {
-      // Fördröj lite för att låta dropdown-klick hinna registreras
-      setTimeout(() => {
-        if (!container.contains(document.activeElement)) {
-          success(currentTags);
-          const tagsChanged = JSON.stringify(originalTags) !== JSON.stringify(currentTags);
-          if (tagsChanged) {
-            setTimeout(() => this.table.setData(this.table.getData()), 10);
+    filteredTags.slice(0, 10).forEach(tag => {
+      const option = document.createElement("div");
+      option.className = "tag-suggestion-option";
+      option.style.cssText = `
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        transition: background-color 0.2s;
+      `;
+      option.textContent = tag;
+      
+      option.addEventListener('mouseenter', () => {
+        option.style.backgroundColor = '#f8f9fa';
+      });
+      
+      option.addEventListener('mouseleave', () => {
+        option.style.backgroundColor = 'transparent';
+      });
+      
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addTag(tag);
+        input.value = '';
+        dropdown.style.display = 'none';
+        input.focus();
+      });
+      
+      dropdown.appendChild(option);
+    });
+    
+    dropdown.style.display = 'block';
+  };
+
+  // Event listeners för input
+  input.addEventListener('input', (e) => {
+    updateDropdown(e.target.value);
+  });
+
+  input.addEventListener('focus', (e) => {
+    if (e.target.value) {
+      updateDropdown(e.target.value);
+    }
+  });
+
+  // Dölj dropdown när man klickar utanför
+  document.addEventListener('click', (e) => {
+    if (!inputContainer.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+
+  // Hantera piltangenter för navigation
+  input.addEventListener('keydown', (e) => {
+    const options = dropdown.querySelectorAll('.tag-suggestion-option');
+    
+    if (e.key === 'ArrowDown' && options.length > 0) {
+      e.preventDefault();
+      const activeOption = dropdown.querySelector('.active') || options[0];
+      const currentIndex = Array.from(options).indexOf(activeOption);
+      const nextIndex = Math.min(currentIndex + 1, options.length - 1);
+      
+      options.forEach(opt => opt.classList.remove('active'));
+      options[nextIndex].classList.add('active');
+      options[nextIndex].style.backgroundColor = '#007bff';
+      options[nextIndex].style.color = 'white';
+    }
+    
+    if (e.key === 'ArrowUp' && options.length > 0) {
+      e.preventDefault();
+      const activeOption = dropdown.querySelector('.active');
+      if (activeOption) {
+        const currentIndex = Array.from(options).indexOf(activeOption);
+        const prevIndex = Math.max(currentIndex - 1, 0);
+        
+        options.forEach(opt => {
+          opt.classList.remove('active');
+          opt.style.backgroundColor = 'transparent';
+          opt.style.color = 'inherit';
+        });
+        options[prevIndex].classList.add('active');
+        options[prevIndex].style.backgroundColor = '#007bff';
+        options[prevIndex].style.color = 'white';
+      }
+    }
+    
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const activeOption = dropdown.querySelector('.active');
+      if (activeOption) {
+        addTag(activeOption.textContent);
+        input.value = '';
+        dropdown.style.display = 'none';
+      } else {
+        addTag(input.value.trim());
+        input.value = '';
+        dropdown.style.display = 'none';
+      }
+    }
+    
+    if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+      input.blur();
+    }
+  });
+
+  const addTag = (tag) => {
+    if (tag && !currentTags.includes(tag)) {
+      currentTags.push(tag);
+      updateTagDisplay();
+    }
+  };
+
+  const removeTag = (tag) => {
+    const idx = currentTags.indexOf(tag);
+    if (idx > -1) {
+      currentTags.splice(idx, 1);
+      updateTagDisplay();
+    }
+  };
+
+  const updateTagDisplay = () => {
+    tagContainer.innerHTML = "";
+
+    if (currentTags.length === 0) {
+      const emptyMessage = document.createElement("div");
+      emptyMessage.className = "text-muted small p-2";
+      emptyMessage.textContent = "Inga taggar tillagda";
+      tagContainer.appendChild(emptyMessage);
+      return;
+    }
+
+    currentTags.forEach((tag) => {
+      const tagElement = document.createElement("div");
+      tagElement.className = "tag-badge d-inline-flex align-items-center";
+
+      const tagText = document.createElement("span");
+      tagText.textContent = tag;
+      tagElement.appendChild(tagText);
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "btn-close btn-close-white ms-1 remove-tag-btn";
+      removeButton.setAttribute("data-tag", tag);
+      removeButton.setAttribute("tabindex", "-1");
+      removeButton.setAttribute("aria-label", "Ta bort");
+      removeButton.addEventListener("click", function (e) {
+        e.stopPropagation();
+        removeTag(tag);
+      });
+
+      tagElement.appendChild(removeButton);
+      tagContainer.appendChild(tagElement);
+    });
+  };
+
+  updateTagDisplay();
+
+  button.addEventListener("click", function () {
+    addTag(input.value.trim());
+    input.value = "";
+    dropdown.style.display = 'none';
+    input.focus();
+  });
+
+  // FIXAD - Använd arrow function för att bevara this-kontext
+  container.addEventListener("focusout", (e) => {
+    setTimeout(() => {
+      if (!container.contains(document.activeElement)) {
+        success(currentTags);
+        const tagsChanged = JSON.stringify(originalTags) !== JSON.stringify(currentTags);
+        if (tagsChanged) {
+          // Säker kontroll av table-instans
+          if (this.table && typeof this.table.getData === 'function') {
+            setTimeout(() => {
+              try {
+                this.table.setData(this.table.getData());
+              } catch (error) {
+                console.error('Fel vid uppdatering av tabelldata:', error);
+              }
+            }, 10);
           }
         }
-      }, 200);
-    });
+      }
+    }, 200);
+  });
 
-    onRendered(function () {
-      input.focus();
-      const cellRect = cell.getElement().getBoundingClientRect();
-      container.style.minWidth = Math.max(cellRect.width, 250) + "px";
-      container.style.position = "absolute";
-    });
+  onRendered(function () {
+    input.focus();
+    const cellRect = cell.getElement().getBoundingClientRect();
+    container.style.minWidth = Math.max(cellRect.width, 250) + "px";
+    container.style.position = "absolute";
+  });
 
-    return container;
-  }
-
+  return container;
+}
   /**
    * Custom Tag HeaderFilter med AND/OR-logik
    */
