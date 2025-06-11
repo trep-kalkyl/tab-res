@@ -1,11 +1,18 @@
 // constructionMethodFooter.js
-// Footer functionality for Construction Method summaries
+// Footer functionality for Construction Method summaries with charts
 
 class ConstructionMethodFooter {
   constructor() {
     this.dataTable = null
     this.footerContainer = null
     this.originalFunctions = {}
+    this.materialChart = null
+    this.workChart = null
+    this.chartColors = [
+      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+      '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+      '#4BC0C0', '#FF6384', '#36A2EB', '#FFCE56'
+    ]
   }
 
   // Initiera footer med dataTable reference
@@ -19,9 +26,33 @@ class ConstructionMethodFooter {
     }
     
     console.log('Initializing Construction Method Footer...')
-    this.setupEventListeners()
-    this.updateFooterDisplay()
+    this.loadChartJS().then(() => {
+      this.setupEventListeners()
+      this.updateFooterDisplay()
+    })
     return true
+  }
+
+  // Ladda Chart.js från CDN
+  async loadChartJS() {
+    if (typeof Chart !== 'undefined') {
+      console.log('Chart.js already loaded')
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js'
+      script.onload = () => {
+        console.log('Chart.js loaded successfully')
+        resolve()
+      }
+      script.onerror = () => {
+        console.error('Failed to load Chart.js')
+        reject(new Error('Failed to load Chart.js'))
+      }
+      document.head.appendChild(script)
+    })
   }
 
   // Funktion för att beräkna footer-data
@@ -73,8 +104,22 @@ class ConstructionMethodFooter {
 
     const footerData = this.calculateFooterData()
     
-    // Skapa HTML för footer
-    let footerHTML = '<h3>Summering per Construction Method</h3>'
+    // Skapa HTML för footer med charts
+    let footerHTML = `
+      <div class="construction-footer-container">
+        <h3>Summering per Construction Method</h3>
+        
+        <div class="charts-container">
+          <div class="chart-wrapper">
+            <h4>Material Fördelning</h4>
+            <canvas id="materialChart" width="300" height="300"></canvas>
+          </div>
+          <div class="chart-wrapper">
+            <h4>Arbetstid Fördelning</h4>
+            <canvas id="workChart" width="300" height="300"></canvas>
+          </div>
+        </div>
+    `
     
     if (Object.keys(footerData).length === 0) {
       footerHTML += '<p style="color: #6c757d; font-style: italic;">Inga data att visa</p>'
@@ -121,7 +166,238 @@ class ConstructionMethodFooter {
       `
     }
     
+    footerHTML += '</div>' // Stäng construction-footer-container
+    
     this.footerContainer.innerHTML = footerHTML
+    
+    // Lägg till CSS om det behövs
+    this.addRequiredCSS()
+    
+    // Skapa charts efter DOM har uppdaterats
+    setTimeout(() => {
+      this.createCharts(footerData)
+    }, 100)
+  }
+
+  // Lägg till nödvändig CSS för charts
+  addRequiredCSS() {
+    if (document.getElementById('construction-footer-styles')) {
+      return // CSS redan tillagt
+    }
+    
+    const style = document.createElement('style')
+    style.id = 'construction-footer-styles'
+    style.textContent = `
+      .construction-footer-container {
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-top: 20px;
+      }
+      
+      .charts-container {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px 0;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+      
+      .chart-wrapper {
+        flex: 1;
+        min-width: 300px;
+        max-width: 400px;
+        text-align: center;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      
+      .chart-wrapper h4 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #333;
+      }
+      
+      .footer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+      }
+      
+      .method-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      
+      .method-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 8px 0;
+      }
+      
+      .method-label {
+        font-weight: 500;
+        color: #666;
+      }
+      
+      .method-value {
+        font-weight: bold;
+        color: #333;
+      }
+      
+      .footer-total {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-top: 20px;
+        border-left: 4px solid #007bff;
+      }
+      
+      .total-value {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #007bff;
+      }
+      
+      @media (max-width: 768px) {
+        .charts-container {
+          flex-direction: column;
+          align-items: center;
+        }
+        
+        .chart-wrapper {
+          min-width: 280px;
+        }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  // Skapa donut charts
+  createCharts(footerData) {
+    if (typeof Chart === 'undefined') {
+      console.warn('Chart.js not loaded, skipping chart creation')
+      return
+    }
+
+    // Förstör befintliga charts
+    if (this.materialChart) {
+      this.materialChart.destroy()
+    }
+    if (this.workChart) {
+      this.workChart.destroy()
+    }
+
+    if (Object.keys(footerData).length === 0) {
+      return
+    }
+
+    const methods = Object.keys(footerData).sort()
+    const materialData = methods.map(method => footerData[method].totalMaterialPrice)
+    const workData = methods.map(method => footerData[method].totalWorkDuration)
+
+    const chartOptions = {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 15,
+            usePointStyle: true,
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const label = context.label || ''
+              const value = context.parsed
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+              return `${label}: ${percentage}%`
+            }
+          }
+        }
+      },
+      cutout: '60%'
+    }
+
+    // Material Chart
+    const materialCtx = document.getElementById('materialChart')
+    if (materialCtx) {
+      this.materialChart = new Chart(materialCtx, {
+        type: 'doughnut',
+        data: {
+          labels: methods,
+          datasets: [{
+            data: materialData,
+            backgroundColor: this.chartColors.slice(0, methods.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const label = context.label || ''
+                  const value = context.parsed
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+                  return `${label}: ${value.toLocaleString('sv-SE')} kr (${percentage}%)`
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+
+    // Work Chart
+    const workCtx = document.getElementById('workChart')
+    if (workCtx) {
+      this.workChart = new Chart(workCtx, {
+        type: 'doughnut',
+        data: {
+          labels: methods,
+          datasets: [{
+            data: workData,
+            backgroundColor: this.chartColors.slice(0, methods.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const label = context.label || ''
+                  const value = context.parsed
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+                  return `${label}: ${value.toLocaleString('sv-SE', {minimumFractionDigits: 1, maximumFractionDigits: 1})} h (${percentage}%)`
+                }
+              }
+            }
+          }
+        }
+      })
+    }
   }
 
   // Wrappa en funktion för att inkludera footer-uppdatering
@@ -198,6 +474,16 @@ class ConstructionMethodFooter {
 
   // Rensa upp (om behövs)
   destroy() {
+    // Förstör charts
+    if (this.materialChart) {
+      this.materialChart.destroy()
+      this.materialChart = null
+    }
+    if (this.workChart) {
+      this.workChart.destroy()
+      this.workChart = null
+    }
+    
     // Återställ original-funktioner
     Object.keys(this.originalFunctions).forEach(functionName => {
       if (this.originalFunctions[functionName]) {
