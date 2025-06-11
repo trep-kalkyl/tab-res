@@ -170,113 +170,10 @@ class ConstructionMethodFooter {
     
     this.footerContainer.innerHTML = footerHTML
     
-    // Lägg till CSS om det behövs
-    this.addRequiredCSS()
-    
     // Skapa charts efter DOM har uppdaterats
     setTimeout(() => {
       this.createCharts(footerData)
     }, 100)
-  }
-
-  // Lägg till nödvändig CSS för charts
-  addRequiredCSS() {
-    if (document.getElementById('construction-footer-styles')) {
-      return // CSS redan tillagt
-    }
-    
-    const style = document.createElement('style')
-    style.id = 'construction-footer-styles'
-    style.textContent = `
-      .construction-footer-container {
-        padding: 20px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        margin-top: 20px;
-      }
-      
-      .charts-container {
-        display: flex;
-        justify-content: space-around;
-        margin: 20px 0;
-        flex-wrap: wrap;
-        gap: 20px;
-      }
-      
-      .chart-wrapper {
-        flex: 1;
-        min-width: 300px;
-        max-width: 400px;
-        text-align: center;
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      
-      .chart-wrapper h4 {
-        margin-top: 0;
-        margin-bottom: 15px;
-        color: #333;
-      }
-      
-      .footer-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin: 20px 0;
-      }
-      
-      .method-card {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      
-      .method-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 8px 0;
-      }
-      
-      .method-label {
-        font-weight: 500;
-        color: #666;
-      }
-      
-      .method-value {
-        font-weight: bold;
-        color: #333;
-      }
-      
-      .footer-total {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-top: 20px;
-        border-left: 4px solid #007bff;
-      }
-      
-      .total-value {
-        font-size: 1.2em;
-        font-weight: bold;
-        color: #007bff;
-      }
-      
-      @media (max-width: 768px) {
-        .charts-container {
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .chart-wrapper {
-          min-width: 280px;
-        }
-      }
-    `
-    document.head.appendChild(style)
   }
 
   // Skapa donut charts
@@ -497,5 +394,5 @@ class ConstructionMethodFooter {
   }
 }
 
-// Exportera klassen som default
-export default ConstructionMethodFooter
+// Gör klassen tillgänglig globalt (för JSFiddle)
+window.ConstructionMethodFooter = ConstructionMethodFooter
