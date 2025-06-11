@@ -170,6 +170,9 @@ class ConstructionMethodFooter {
     
     this.footerContainer.innerHTML = footerHTML
     
+    // Lägg till CSS om det behövs
+    this.addRequiredCSS()
+    
     // Skapa charts efter DOM har uppdaterats
     setTimeout(() => {
       this.createCharts(footerData)
@@ -394,5 +397,5 @@ class ConstructionMethodFooter {
   }
 }
 
-// Gör klassen tillgänglig globalt (för JSFiddle)
-window.ConstructionMethodFooter = ConstructionMethodFooter
+// Exportera klassen som default
+export default ConstructionMethodFooter
