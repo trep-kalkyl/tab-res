@@ -1,6 +1,6 @@
 // ======= projectCalcUtils.js =======
 
-const DEBUG = true;
+const DEBUG = false;
 
 // Calculation helpers
 export function updateTaskTotals(task) {
