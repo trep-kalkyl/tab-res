@@ -48,15 +48,13 @@ export function updateAllData(project) {
 }
 
 // Data helpers
+
+// BLINK-FRI VERSION!
 export function getAllItemsWithPartRef(parts, selectedParts) {
   if (!parts) return [];
   return parts.flatMap(part =>
     (!selectedParts || selectedParts.includes(part.prt_id))
-      ? (part.prt_items || []).map(item => ({
-          ...item,
-          itm_prt_id: part.prt_id,
-          itm_tasks: (item.itm_tasks || []).map(t => ({ ...t }))
-        }))
+      ? (part.prt_items || [])
       : []
   );
 }
@@ -99,11 +97,7 @@ export function moveItemToPart(project, itemId, newPartId) {
   updateProjectTotals(project);
 
   return {
-    newItem: {
-      ...item,
-      itm_prt_id: newPart.prt_id,
-      itm_tasks: (item.itm_tasks || []).map(t => ({ ...t }))
-    },
+    newItem: item,
     oldPart,
     newPart
   };
