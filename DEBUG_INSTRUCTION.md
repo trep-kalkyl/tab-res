@@ -1,4 +1,4 @@
-# Instruction for DEBUG Functionality in External JS Files
+# Instruction for DEBUG Functionality for Tabulator Project.
 
 ## Purpose
 The purpose of debug functionality is to provide a consistent and controlled way to log input, output, and key intermediate results from functions. This makes troubleshooting and verifying logic in code split into external files much easier.
@@ -17,6 +17,7 @@ const DEBUG = false; // Set to true while debugging
 
 ### 2. Output Structure
 - Always use clear labels for logs: `[FUNCTION][IN]`, `[FUNCTION][OUT]`, `[FUNCTION][ERROR]`, etc.
+- Output must always be in English.
 - Only log relevant and readable key values (e.g. ids, counts, summaries, and errors).
 - Avoid logging entire large objects – prefer selected fields or summaries.
 
@@ -43,6 +44,7 @@ No logs should remain active in production.
 ### 6. Output Format
 - Logs should be machine-readable when possible (always log as objects, not just plain text).
 - Always include the function name and context as the first part of each log.
+- All log output must be in English.
 
 **Example:**
 ```js
@@ -54,6 +56,7 @@ console.log("[moveItemToPart][ERROR]", { reason: "item not found", itemId });
 ## Summary
 - DEBUG flag at the top
 - Clear, structured output with function name and IN/OUT tags
+- All log messages and output in English
 - Log only relevant key values
 - Easy on/off toggle
 - No logs in production
