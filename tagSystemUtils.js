@@ -1,128 +1,4 @@
 /**
- * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Stöder AND/OR-logik, debug-läge, konfigurerbar UI och AJAX-integrering
- */
-
-class TagSystemUtils {
-  constructor() {
-    this.debugMode = false;
-    this.currentFilter = [];
-    this.filterLogic = 'AND'; // 'AND' eller 'OR'
-    this.table = null;
-    this.ajaxCallback = null; // För AJAX-hantering
-    
-    // KONFIGURATION FÖR TOGGLE-KNAPPEN
-    this.toggleConfig = {
-      AND: {
-        html: '<i class="fa fa-eye text-success text-warning"></i> ALLA',
-        title: 'AND-filter: Alla valda taggar måste finnas (klicka för OR)',
-        activeStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
-        inactiveStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
-      },
-      OR: {
-        html: 'OR',
-        title: 'OR-filter: Minst en vald tagg måste finnas (klicka för AND)',
-        activeStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
-        inactiveStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
-      }
-    };
-  }
-
-  /**
-   * Initialiserar tag-systemet med en Tabulator-instans
-   * @param {Tabulator} tabulatorInstance - Tabulator-instansen
-   * @param {Object} options - Konfigurationsalternativ
-   */
-  init(tabulatorInstance, options = {}) {
-    this.table = tabulatorInstance;
-    
-    // Konfigurera alternativ
-    if (options.debugMode !== undefined) this.debugMode = options.debugMode;
-    if (options.filterLogic) this.filterLogic = options.filterLogic;
-    if (options.ajaxCallback) this.ajaxCallback = options.ajaxCallback;
-    if (options.toggleConfig) {
-      Object.assign(this.toggleConfig, options.toggleConfig);
-    }
-
-    // Lyssna på dataFiltered event för att uppdatera debug info
-    this.table.on("dataFiltered", (filters, rows) => {
-      if (this.debugMode) {
-        this.updateDebugInfo(this.currentFilter);
-      }
-    });
-  }
-
-  /**
-   * Sätt AJAX-callback funktion
-   * @param {Function} callback - Callback-funktion för AJAX-anrop
-   */
-  setAjaxCallback(callback) {
-    this.ajaxCallback = callback;
-  }
-
-  /**
-   * Funktion för att uppdatera toggle-konfiguration
-   */
-  updateToggleConfig(logic, newConfig) {
-    if (this.toggleConfig[logic]) {
-      Object.assign(this.toggleConfig[logic], newConfig);
-    }
-  }
-
-  /**
-   * Förbättrad funktion för att räkna synliga rader med DOM
-   */
-  countVisibleRows() {
-    if (!this.table) return 0;
-    
-    const tableElement = this.table.element.querySelector(".tabulator-table");
-    if (!tableElement) {
-      console.error("Tabellens DOM-element hittades inte!");
-      return 0;
-    }
-    
-    const visibleRows = Array.from(tableElement.querySelectorAll(".tabulator-row"))
-      .filter(row => row.style.display !== "none")
-      .length;
-    
-    return visibleRows;
-  }
-
-  /**
-   * Uppdaterar debug-information
-   */
-  updateDebugInfo(selectedTags) {
-    if (!this.debugMode) return;
-    
-    const debugElement = document.getElementById('debug-text');
-    if (!debugElement) return;
-    
-    // Vänta lite för att DOM ska uppdateras efter filtrering
-    setTimeout(() => {
-      const visibleRows = this.countVisibleRows();
-      
-      if (selectedTags.length === 0) {
-        debugElement.textContent = `Inget filter aktivt - ${visibleRows} rader visas`;
-      } else {
-        debugElement.textContent = `Filter: [${selectedTags.join(', ')}] - ${visibleRows} rader visas (${this.filterLogic}-logik)`;
-      }
-    }, 100);
-  }
-
-  /**
-   * Hämtar alla unika taggar från data
-   */
-  getAllUniqueTags(data) {
-    const tags = new Set();
-    data.forEach((row) => {
-      if (Array.isArray(row.tags)) {
-        row.tags.forEach((tag) => tags.add(tag));
-      }
-    });
-    return Array.from(tags).sort();
-  }
-
-  /**
    * Formatter: visar taggar som badges UTAN kryss i visningsläge
    */
   tagFormatter(cell) {
@@ -187,28 +63,43 @@ class TagSystemUtils {
     `;
     inputContainer.appendChild(dropdown);
 
-    // FIXAD - Säker hämtning av befintliga taggar
+    // Säker hämtning av befintliga taggar från den aktuella tabellen
     const getAllExistingTags = () => {
       const allTags = new Set();
       
+      // Hitta den tabell som denna cell tillhör
+      const cellTable = cell.getTable();
+      
       // Kontrollera att table finns och är initialiserad
-      if (!this.table || typeof this.table.getData !== 'function') {
+      if (!cellTable || typeof cellTable.getData !== 'function') {
         console.warn('Tabulator-instansen är inte tillgänglig');
         return [];
       }
       
       try {
-        const tableData = this.table.getData();
+        const tableData = cellTable.getData();
         if (!Array.isArray(tableData)) {
           console.warn('Table data är inte en array');
           return [];
         }
         
-        tableData.forEach(row => {
-          if (Array.isArray(row.tags)) {
-            row.tags.forEach(tag => allTags.add(tag));
-          }
-        });
+        // Hitta rätt tagg-fält baserat på data
+        const sampleRow = tableData[0];
+        let tagField = null;
+        if (sampleRow) {
+          if (sampleRow.prt_tags !== undefined) tagField = 'prt_tags';
+          else if (sampleRow.itm_tags !== undefined) tagField = 'itm_tags';
+          else if (sampleRow.tsk_tags !== undefined) tagField = 'tsk_tags';
+          else if (sampleRow.tags !== undefined) tagField = 'tags';
+        }
+        
+        if (tagField) {
+          tableData.forEach(row => {
+            if (Array.isArray(row[tagField])) {
+              row[tagField].forEach(tag => allTags.add(tag));
+            }
+          });
+        }
       } catch (error) {
         console.error('Fel vid hämtning av tabelldata:', error);
         return [];
@@ -396,7 +287,7 @@ class TagSystemUtils {
       input.focus();
     });
 
-    // FIXAD - Använd arrow function för att bevara this-kontext
+    // Använd arrow function för att bevara this-kontext
     // Lägg till AJAX-hantering när taggar ändras
     container.addEventListener("focusout", (e) => {
       setTimeout(() => {
@@ -405,10 +296,11 @@ class TagSystemUtils {
           const tagsChanged = JSON.stringify(originalTags) !== JSON.stringify(currentTags);
           if (tagsChanged) {
             // Säker kontroll av table-instans
-            if (this.table && typeof this.table.getData === 'function') {
+            const cellTable = cell.getTable();
+            if (cellTable && typeof cellTable.getData === 'function') {
               setTimeout(() => {
                 try {
-                  this.table.setData(this.table.getData());
+                  cellTable.setData(cellTable.getData());
                 } catch (error) {
                   console.error('Fel vid uppdatering av tabelldata:', error);
                 }
@@ -536,7 +428,10 @@ class TagSystemUtils {
     let overlay = null;
     let selectedTags = [];
     let isOpen = false;
-    let allTags = this.getAllUniqueTags(this.table.getData());
+    
+    // Hämta taggar från den aktuella tabellen
+    const getCurrentTable = () => cell.getTable();
+    let allTags = [];
 
     // Funktion för att uppdatera toggle-knappen med konfigurerbar HTML
     const updateLogicToggleDisplay = () => {
@@ -618,7 +513,7 @@ class TagSystemUtils {
       success(filterValue);
       
       // Uppdatera debug info
-      this.updateDebugInfo(selectedTags);
+      this.updateDebugInfo(selectedTags, getCurrentTable());
     };
 
     const closeDropdown = () => {
@@ -639,7 +534,7 @@ class TagSystemUtils {
 
       isOpen = true;
       arrow.classList.add("open");
-      allTags = this.getAllUniqueTags(this.table.getData());
+      allTags = this.getAllUniqueTags(getCurrentTable().getData());
 
       // Overlay-metod
       overlay = document.createElement("div");
@@ -671,10 +566,10 @@ class TagSystemUtils {
         
         // Tvinga om-filtrering
         if (selectedTags.length > 0) {
-          this.table.refreshFilter();
+          getCurrentTable().refreshFilter();
         }
         
-        this.updateDebugInfo(selectedTags);
+        this.updateDebugInfo(selectedTags, getCurrentTable());
         return;
       }
       
@@ -685,7 +580,7 @@ class TagSystemUtils {
         this.currentFilter = [];
         updateDisplay();
         success(null);
-        this.updateDebugInfo(selectedTags);
+        this.updateDebugInfo(selectedTags, getCurrentTable());
         return;
       }
       
@@ -699,7 +594,7 @@ class TagSystemUtils {
       this.currentFilter = [];
       updateDisplay();
       success(null);
-      this.updateDebugInfo(selectedTags);
+      this.updateDebugInfo(selectedTags, getCurrentTable());
     });
 
     // Close dropdown when clicking outside
@@ -724,12 +619,15 @@ class TagSystemUtils {
   }
 
   /**
-   * Rensa alla filter
+   * Rensa alla filter för en specifik tabell
    */
-  clearFilters() {
+  clearFilters(table = null) {
     this.currentFilter = [];
-    this.table.clearHeaderFilter();
-    this.updateDebugInfo([]);
+    const targetTable = table || this.tables.values().next().value;
+    if (targetTable) {
+      targetTable.clearHeaderFilter();
+      this.updateDebugInfo([], targetTable);
+    }
   }
 
   /**
@@ -802,4 +700,496 @@ class TagSystemUtils {
 }
 
 // Exportera som default export för ES6 modules
-export default TagSystemUtils;
+export default TagSystemUtils;/**
+ * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
+ * Stöder AND/OR-logik, debug-läge, konfigurerbar UI och AJAX-integrering
+ * Optimerad för att hantera flera tabeller och entiteter samtidigt
+ */
+
+class TagSystemUtils {
+  constructor() {
+    this.debugMode = false;
+    this.currentFilter = [];
+    this.filterLogic = 'AND'; // 'AND' eller 'OR'
+    this.tables = new Map(); // Stöd för flera tabeller
+    this.ajaxCallback = null; // För AJAX-hantering
+    this.project = null;
+    this.helpers = null; // Hjälpfunktioner från main.js
+    
+    // KONFIGURATION FÖR TOGGLE-KNAPPEN
+    this.toggleConfig = {
+      AND: {
+        html: '<i class="fa fa-eye text-success text-warning"></i> ALLA',
+        title: 'AND-filter: Alla valda taggar måste finnas (klicka för OR)',
+        activeStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
+        inactiveStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
+      },
+      OR: {
+        html: 'OR',
+        title: 'OR-filter: Minst en vald tagg måste finnas (klicka för AND)',
+        activeStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
+        inactiveStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
+      }
+    };
+  }
+
+  /**
+   * Initialiserar tag-systemet med Tabulator-instanser
+   * @param {Tabulator} partTable - Part-tabellen
+   * @param {Tabulator} itemTable - Item-tabellen  
+   * @param {Object} project - Projektdata
+   * @param {Object} ajaxHandler - AJAX-hanterare
+   * @param {Object} helpers - Hjälpfunktioner från main.js
+   */
+  init(partTable, itemTable, project, ajaxHandler, helpers) {
+    this.tables.set('part', partTable);
+    this.tables.set('item', itemTable);
+    this.project = project;
+    this.ajaxCallback = ajaxHandler;
+    this.helpers = helpers;
+
+    // Lägg till taggar till tabeller
+    this.addTagsToTable(partTable, "part", project);
+    this.addTagsToTable(itemTable, "item", project);
+
+    // Setup event listeners för dataFiltered
+    [partTable, itemTable].forEach(table => {
+      table.on("dataFiltered", (filters, rows) => {
+        if (this.debugMode) {
+          this.updateDebugInfo(this.currentFilter);
+        }
+      });
+    });
+  }
+
+  /**
+   * AJAX-hantering för tagguppdateringar
+   */
+  handleTagUpdate(entityType, entityId, newTags, oldTags = []) {
+    const ajaxData = {
+      action: "updateTags",
+      entityType: entityType, // "part", "item", eller "task"
+      entityId: entityId,
+      tags: newTags,
+      oldTags: oldTags
+    };
+    
+    if (this.ajaxCallback && this.ajaxCallback.queuedEchoAjax) {
+      this.ajaxCallback.queuedEchoAjax(ajaxData);
+    }
+  }
+
+  /**
+   * Hämta befintliga taggar för en specifik entitetstyp
+   */
+  getExistingTagsForEntityType(entityType) {
+    switch(entityType) {
+      case 'part': return this.getExistingPartTags();
+      case 'item': return this.getExistingItemTags();
+      case 'task': return this.getExistingTaskTags();
+      default: return [];
+    }
+  }
+
+  /**
+   * Hämta alla part-taggar
+   */
+  getExistingPartTags() {
+    const partTags = new Set();
+    
+    this.project.prt_parts?.forEach(part => {
+      if (Array.isArray(part.prt_tags)) {
+        part.prt_tags.forEach(tag => partTags.add(tag));
+      }
+    });
+    
+    return Array.from(partTags).sort();
+  }
+
+  /**
+   * Hämta alla item-taggar
+   */
+  getExistingItemTags() {
+    const itemTags = new Set();
+    
+    this.project.prt_parts?.forEach(part => {
+      part.prt_items?.forEach(item => {
+        if (Array.isArray(item.itm_tags)) {
+          item.itm_tags.forEach(tag => itemTags.add(tag));
+        }
+      });
+    });
+    
+    return Array.from(itemTags).sort();
+  }
+
+  /**
+   * Hämta alla task-taggar
+   */
+  getExistingTaskTags() {
+    const taskTags = new Set();
+    
+    this.project.prt_parts?.forEach(part => {
+      part.prt_items?.forEach(item => {
+        item.itm_tasks?.forEach(task => {
+          if (Array.isArray(task.tsk_tags)) {
+            task.tsk_tags.forEach(tag => taskTags.add(tag));
+          }
+        });
+      });
+    });
+    
+    return Array.from(taskTags).sort();
+  }
+
+  /**
+   * Förbättrad tagg-editor som används av alla entitetstyper
+   */
+  createTagEditor(cell, onRendered, success, cancel, tagField, entityType) {
+    // Skapa overlay
+    const overlay = document.createElement("div");
+    overlay.className = "tag-editor-overlay";
+    
+    // Skapa editor-box
+    const editorBox = document.createElement("div");
+    editorBox.className = "tag-editor-box";
+    
+    // Titel
+    const title = document.createElement("h5");
+    title.className = "tag-editor-title";
+    title.textContent = "Redigera taggar";
+    editorBox.appendChild(title);
+    
+    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
+    const existingTags = this.getExistingTagsForEntityType(entityType);
+    
+    // Sektion för valda taggar
+    const selectedTagsSection = document.createElement("div");
+    selectedTagsSection.className = "tag-section";
+    
+    const selectedLabel = document.createElement("label");
+    selectedLabel.className = "tag-section-label";
+    selectedLabel.textContent = "Valda taggar:";
+    selectedTagsSection.appendChild(selectedLabel);
+    
+    const tagContainer = document.createElement("div");
+    tagContainer.className = "tag-container";
+    selectedTagsSection.appendChild(tagContainer);
+    
+    editorBox.appendChild(selectedTagsSection);
+    
+    // Sektion för befintliga taggar
+    const existingTagsSection = document.createElement("div");
+    existingTagsSection.className = "tag-section";
+    
+    const existingLabel = document.createElement("label");
+    existingLabel.className = "tag-section-label";
+    existingLabel.textContent = "Tillgängliga taggar (klicka för att lägga till):";
+    existingTagsSection.appendChild(existingLabel);
+    
+    const existingTagsContainer = document.createElement("div");
+    existingTagsContainer.className = "existing-tags-container";
+    existingTagsSection.appendChild(existingTagsContainer);
+    
+    editorBox.appendChild(existingTagsSection);
+    
+    // Sektion för nya taggar
+    const newTagSection = document.createElement("div");
+    newTagSection.className = "tag-section";
+    
+    const newLabel = document.createElement("label");
+    newLabel.className = "tag-section-label";
+    newLabel.textContent = "Lägg till ny tagg:";
+    newTagSection.appendChild(newLabel);
+    
+    const inputContainer = document.createElement("div");
+    inputContainer.className = "input-container";
+    
+    const input = document.createElement("input");
+    input.className = "tag-input";
+    input.type = "text";
+    input.placeholder = "Skriv ny tagg...";
+    inputContainer.appendChild(input);
+    
+    const addButton = document.createElement("button");
+    addButton.className = "btn btn-primary";
+    addButton.textContent = "Lägg till";
+    inputContainer.appendChild(addButton);
+    
+    newTagSection.appendChild(inputContainer);
+    editorBox.appendChild(newTagSection);
+    
+    // Knappar
+    const buttonContainer = document.createElement("div");
+    buttonContainer.className = "button-container";
+    
+    const saveButton = document.createElement("button");
+    saveButton.className = "btn btn-success";
+    saveButton.textContent = "Spara";
+    buttonContainer.appendChild(saveButton);
+    
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "btn btn-secondary";
+    cancelButton.textContent = "Avbryt";
+    buttonContainer.appendChild(cancelButton);
+    
+    editorBox.appendChild(buttonContainer);
+    
+    // Funktion för att uppdatera visning av valda taggar
+    const updateTagDisplay = () => {
+      tagContainer.innerHTML = "";
+      if (currentTags.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Inga taggar tillagda";
+        tagContainer.appendChild(emptySpan);
+      } else {
+        currentTags.forEach((tag) => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item selected";
+          tagEl.title = "Klicka för att ta bort";
+          
+          const tagText = document.createElement("span");
+          tagText.textContent = tag;
+          tagEl.appendChild(tagText);
+          
+          const removeBtn = document.createElement("span");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "×";
+          tagEl.appendChild(removeBtn);
+          
+          tagEl.addEventListener("click", () => removeTag(tag));
+          tagContainer.appendChild(tagEl);
+        });
+      }
+      updateExistingTagsDisplay();
+    };
+    
+    // Funktion för att uppdatera visning av tillgängliga taggar
+    const updateExistingTagsDisplay = () => {
+      existingTagsContainer.innerHTML = "";
+      const availableNow = existingTags.filter(tag => !currentTags.includes(tag));
+      
+      if (availableNow.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Alla tillgängliga taggar är redan tillagda";
+        existingTagsContainer.appendChild(emptySpan);
+      } else {
+        availableNow.forEach(tag => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item available";
+          tagEl.textContent = tag;
+          tagEl.title = "Klicka för att lägga till";
+          tagEl.addEventListener("click", () => addTag(tag));
+          existingTagsContainer.appendChild(tagEl);
+        });
+      }
+    };
+    
+    // Funktion för att lägga till tagg
+    const addTag = (tag) => {
+      if (tag && !currentTags.includes(tag)) {
+        currentTags.push(tag);
+        updateTagDisplay();
+      }
+    };
+    
+    // Funktion för att ta bort tagg
+    const removeTag = (tag) => {
+      const index = currentTags.indexOf(tag);
+      if (index > -1) {
+        currentTags.splice(index, 1);
+        updateTagDisplay();
+      }
+    };
+    
+    // Event listeners
+    addButton.addEventListener("click", () => {
+      const newTag = input.value.trim();
+      if (newTag) {
+        addTag(newTag);
+        input.value = "";
+        input.focus();
+      }
+    });
+    
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        const newTag = input.value.trim();
+        if (newTag) {
+          addTag(newTag);
+          input.value = "";
+        }
+      }
+    });
+    
+    saveButton.addEventListener("click", () => {
+      success(currentTags);
+      const rowData = cell.getRow().getData();
+      rowData[tagField] = currentTags;
+      cell.getRow().update(rowData);
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
+    
+    cancelButton.addEventListener("click", () => {
+      cancel();
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
+    
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    });
+    
+    // Escape-tangent support
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    
+    overlay.appendChild(editorBox);
+    document.body.appendChild(overlay);
+    
+    // Initiera visningar
+    updateTagDisplay();
+    
+    // Fokusera på input
+    setTimeout(() => input.focus(), 100);
+    
+    onRendered(() => {});
+    
+    return document.createElement("div");
+  }
+
+  /**
+   * Lägg till taggar till en tabell
+   */
+  addTagsToTable(table, entityType = "item", project, options = {}) {
+    // Kontrollera om tabellen redan har taggar
+    const existingColumns = table.getColumns();
+    const tagField = entityType === "part" ? "prt_tags" : 
+                     entityType === "item" ? "itm_tags" : 
+                     "tsk_tags";
+    
+    const hasTagColumn = existingColumns.some(col => col.getField() === tagField);
+    
+    if (hasTagColumn) {
+      return;
+    }
+
+    const setup = () => {
+      const isItemsTable = table.element && table.element.id === 'item-table';
+      
+      if (isItemsTable && this.helpers?.applyPartFilter) {
+        // För Items-tabellen: intercepta TagSystemUtils filter-calls
+        const originalSetFilter = table.setFilter.bind(table);
+        
+        table.setFilter = function(filters) {
+          // Om det här är ett tagg-filter-anrop, spara filtret och använd vår kombinerade funktion
+          if (Array.isArray(filters) && filters.length === 1 && filters[0].field === 'itm_tags') {
+            window.itemsTagFilter = filters[0].value;
+            this.helpers.applyPartFilter(); // Använd vår kombinerade filter-funktion
+            return;
+          } else if (filters === null || (Array.isArray(filters) && filters.length === 0)) {
+            window.itemsTagFilter = null;
+            this.helpers.applyPartFilter(); // Använd vår kombinerade filter-funktion
+            return;
+          }
+          
+          // För alla andra filter-anrop, använd original-funktionen
+          originalSetFilter(filters);
+        }.bind(this);
+      }
+
+      this.ensureTagsArray(table, entityType);
+
+      // Modifierad kolumn-konfiguration med AJAX-hantering
+      const tagCol = this.getColumnConfig(tagField);
+      
+      // Wrappa den ursprungliga editorn för att lägga till AJAX-funktionalitet
+      const originalEditor = tagCol.editor;
+      tagCol.editor = (cell, onRendered, success, cancel, editorParams) => {
+        const rowData = cell.getRow().getData();
+        const oldTags = Array.isArray(rowData[tagField]) ? [...rowData[tagField]] : [];
+        
+        return this.createTagEditor(cell, onRendered, (newTags) => {
+          // Uppdatera data i rätt entitet baserat på tabelltyp
+          let entityId, entityTypeStr;
+          
+          if (entityType === "part") {
+            entityId = rowData.prt_id;
+            entityTypeStr = "part";
+            // Uppdatera part i project data
+            const part = this.helpers?.findPartById?.(project, entityId);
+            if (part) {
+              part.prt_tags = newTags || [];
+            }
+          } else if (entityType === "item") {
+            entityId = rowData.itm_id;
+            entityTypeStr = "item";
+            // Uppdatera item i project data
+            const item = this.helpers?.findItemById?.(project, entityId);
+            if (item) {
+              item.itm_tags = newTags || [];
+            }
+          } else if (entityType === "task") {
+            entityId = rowData.tsk_id;
+            entityTypeStr = "task";
+            // Uppdatera task i project data
+            const task = this.helpers?.findTaskById?.(project, entityId);
+            if (task) {
+              task.tsk_tags = newTags || [];
+            }
+          }
+          
+          // Skicka AJAX-anrop för tagguppdatering
+          this.handleTagUpdate(entityTypeStr, entityId, newTags || [], oldTags);
+          
+          // Anropa ursprunglig success-callback
+          success(newTags);
+        }, cancel, tagField, entityType);
+      };
+
+      // Lägg kolumnen
+      table.addColumn(tagCol).catch(() => {
+        const current = table.getColumnDefinitions();
+        table.setColumns([...current, tagCol]);
+      });
+
+      window.__tagUtils = window.__tagUtils || {};
+      window.__tagUtils[table.element.id || "table"] = this;
+    };
+
+    // Kör direkt om redan byggt, annars vänta på eventet
+    if (table.initialized || table._rendered) setup();
+    else table.on("tableBuilt", setup);
+  }
+
+  /**
+   * Säkerställ att alla rader har tags-array
+   */
+  ensureTagsArray(table, entityType) {
+    const data = table.getData();
+    let dataChanged = false;
+    
+    const tagField = entityType === "part" ? "prt_tags" : 
+                     entityType === "item" ? "itm_tags" : 
+                     "tsk_tags";
+    
+    data.forEach(row => {
+      if (!Array.isArray(row[tagField])) {
+        row[tagField] = [];
+        dataChanged = true;
+      }
+    });
+  }
