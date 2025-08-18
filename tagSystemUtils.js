@@ -416,19 +416,19 @@ class TagSystemUtils {
     const dropdown = document.createElement("div");
     dropdown.className = "tag-filter-dropdown-fixed";
     dropdown.style.cssText = `
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      z-index: 10000;
-      background: white;
-      border: 1px solid #ddd;
-      border-top: none;
-      border-radius: 0 0 4px 4px;
-      max-height: 200px;
-      overflow-y: auto;
-      display: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+     //  position: absolute;
+     //  top: 100%;
+  //    left: 0;
+      right:40px;
+   //   z-index: 10000;
+   //   background: white;
+   //  border: 1px solid #ddd;
+    //  border-top: none;
+    //  border-radius: 0 0 4px 4px;
+     // max-height: 200px;
+     // overflow-y: auto;
+    //  display: none;
+     // box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     `;
     container.appendChild(dropdown);
 
