@@ -1,551 +1,661 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Overlayen tas bort manuellt vid spara/avbryt!
+ * Stöder AND/OR-logik, debug-läge, konfigurerbar UI och AJAX-integrering
  */
+
 class TagSystemUtils {
-  static #initializedTables = new WeakSet();
-
-  static attachToTable(table, project, entityType = "item", ajaxHandler) {
-    const tagField = entityType === "part" ? "prt_tags" : entityType === "item" ? "itm_tags" : "tsk_tags";
-    if (!table || TagSystemUtils.#initializedTables.has(table)) return;
-    if (table.getColumns().some(col => col.getField() === tagField)) {
-      TagSystemUtils.#initializedTables.add(table);
-      return;
-    }
-    const tagsUtil = new TagSystemUtils(table, project, entityType, tagField, ajaxHandler);
-    table.addColumn(tagsUtil.getColumnConfig());
-    TagSystemUtils.#initializedTables.add(table);
-    window.__tagUtils = window.__tagUtils || {};
-    window.__tagUtils[table.element?.id || "table"] = tagsUtil;
-  }
-
-  constructor(table, project, entityType, tagField, ajaxHandler) {
-    this.table = table;
-    this.project = project;
-    this.entityType = entityType;
-    this.tagField = tagField;
-    this.ajaxHandler = ajaxHandler;
-    this.filterLogic = "AND";
+  constructor() {
+    this.debugMode = false;
     this.currentFilter = [];
-    this.__lastTagsCache = null;
-    this.__lastDataHash = null;
-  }
-
-  #dataHash() {
-    try {
-      return JSON.stringify(this.project);
-    } catch {
-      return Date.now() + "";
-    }
-  }
-
-  invalidateTagsCache() {
-    this.__lastTagsCache = null;
-    this.__lastDataHash = null;
-  }
-
-  getAllTags() {
-    const hash = this.#dataHash();
-    if (this.__lastDataHash === hash && this.__lastTagsCache) return this.__lastTagsCache;
-
-    const tags = new Set();
-    if (!this.project) return [];
-    if (this.entityType === "part") {
-      this.project.prt_parts?.forEach(part => part.prt_tags?.forEach(tag => tags.add(tag)));
-    } else if (this.entityType === "item") {
-      this.project.prt_parts?.forEach(part => part.prt_items?.forEach(item => item.itm_tags?.forEach(tag => tags.add(tag))));
-    } else if (this.entityType === "task") {
-      this.project.prt_parts?.forEach(part =>
-        part.prt_items?.forEach(item =>
-          item.itm_tasks?.forEach(task => task.tsk_tags?.forEach(tag => tags.add(tag)))
-        )
-      );
-    }
-    this.__lastTagsCache = Array.from(tags).sort();
-    this.__lastDataHash = hash;
-    return this.__lastTagsCache;
-  }
-
-  findEntityById(id) {
-    if (this.entityType === "part") return this.project.prt_parts?.find(p => p.prt_id === id);
-    if (this.entityType === "item") {
-      for (const part of this.project.prt_parts || []) {
-        const found = (part.prt_items || []).find(i => i.itm_id === id);
-        if (found) return found;
-      }
-    }
-    if (this.entityType === "task") {
-      for (const part of this.project.prt_parts || []) {
-        for (const item of part.prt_items || []) {
-          const found = (item.itm_tasks || []).find(t => t.tsk_id === id);
-          if (found) return found;
-        }
-      }
-    }
-    return null;
-  }
-
-  handleTagUpdate(entityId, newTags, oldTags = []) {
-    if (!this.ajaxHandler) {
-      if (window?.console) console.warn("Ingen AJAX-handler kopplad för tagguppdatering.");
-      return;
-    }
-    const entityType = this.entityType;
-    try {
-      this.ajaxHandler.queuedEchoAjax({
-        action: "updateTags",
-        entityType,
-        entityId,
-        tags: newTags,
-        oldTags
-      });
-    } catch (e) {
-      if (window?.console) console.error("Misslyckades med AJAX-anrop:", e);
-    }
-  }
-
-  getColumnConfig() {
-    return {
-      title: "Taggar",
-      field: this.tagField,
-      formatter: cell => this.tagFormatter(cell),
-      editor: (cell, onRendered, success, cancel) =>
-        this.tagEditor(cell, onRendered, success, cancel),
-      headerFilter: (cell, onRendered, success, cancel, editorParams) =>
-        this.headerFilterElement(cell, onRendered, success, cancel, editorParams),
-      headerFilterFunc: (headerValue, rowValue, rowData, filterParams) =>
-        this.headerFilterFunc(headerValue, rowValue, rowData, filterParams),
-      headerFilterEmptyCheck: value => !value || !Array.isArray(value) || value.length === 0,
-      cellEdited: (cell) => {
-        // Uppdatera tabellen efter tagg-ändring
-        setTimeout(() => {
-          this.table.redraw();
-        }, 50);
+    this.filterLogic = 'AND'; // 'AND' eller 'OR'
+    this.table = null;
+    this.ajaxCallback = null; // För AJAX-hantering
+    
+    // KONFIGURATION FÖR TOGGLE-KNAPPEN
+    this.toggleConfig = {
+      AND: {
+        html: '<i class="fa fa-eye text-success text-warning"></i> ALLA',
+        title: 'AND-filter: Alla valda taggar måste finnas (klicka för OR)',
+        activeStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
+        inactiveStyle: 'background:#007bff;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
+      },
+      OR: {
+        html: 'OR',
+        title: 'OR-filter: Minst en vald tagg måste finnas (klicka för AND)',
+        activeStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:1;',
+        inactiveStyle: 'background:#28a745;color:white;border:none;border-radius:3px;padding:2px 6px;font-size:10px;margin-left:3px;cursor:pointer;opacity:0.4;'
       }
     };
   }
 
+  /**
+   * Initialiserar tag-systemet med en Tabulator-instans
+   * @param {Tabulator} tabulatorInstance - Tabulator-instansen
+   * @param {Object} options - Konfigurationsalternativ
+   */
+  init(tabulatorInstance, options = {}) {
+    this.table = tabulatorInstance;
+    
+    // Konfigurera alternativ
+    if (options.debugMode !== undefined) this.debugMode = options.debugMode;
+    if (options.filterLogic) this.filterLogic = options.filterLogic;
+    if (options.ajaxCallback) this.ajaxCallback = options.ajaxCallback;
+    if (options.toggleConfig) {
+      Object.assign(this.toggleConfig, options.toggleConfig);
+    }
+
+    // Lyssna på dataFiltered event för att uppdatera debug info
+    this.table.on("dataFiltered", (filters, rows) => {
+      if (this.debugMode) {
+        this.updateDebugInfo(this.currentFilter);
+      }
+    });
+  }
+
+  /**
+   * Sätt AJAX-callback funktion
+   * @param {Function} callback - Callback-funktion för AJAX-anrop
+   */
+  setAjaxCallback(callback) {
+    this.ajaxCallback = callback;
+  }
+
+  /**
+   * Funktion för att uppdatera toggle-konfiguration
+   */
+  updateToggleConfig(logic, newConfig) {
+    if (this.toggleConfig[logic]) {
+      Object.assign(this.toggleConfig[logic], newConfig);
+    }
+  }
+
+  /**
+   * Förbättrad funktion för att räkna synliga rader med DOM
+   */
+  countVisibleRows() {
+    if (!this.table) return 0;
+    
+    const tableElement = this.table.element.querySelector(".tabulator-table");
+    if (!tableElement) {
+      console.error("Tabellens DOM-element hittades inte!");
+      return 0;
+    }
+    
+    const visibleRows = Array.from(tableElement.querySelectorAll(".tabulator-row"))
+      .filter(row => row.style.display !== "none")
+      .length;
+    
+    return visibleRows;
+  }
+
+  /**
+   * Uppdaterar debug-information
+   */
+  updateDebugInfo(selectedTags) {
+    if (!this.debugMode) return;
+    
+    const debugElement = document.getElementById('debug-text');
+    if (!debugElement) return;
+    
+    // Vänta lite för att DOM ska uppdateras efter filtrering
+    setTimeout(() => {
+      const visibleRows = this.countVisibleRows();
+      
+      if (selectedTags.length === 0) {
+        debugElement.textContent = `Inget filter aktivt - ${visibleRows} rader visas`;
+      } else {
+        debugElement.textContent = `Filter: [${selectedTags.join(', ')}] - ${visibleRows} rader visas (${this.filterLogic}-logik)`;
+      }
+    }, 100);
+  }
+
+  /**
+   * Hämtar alla unika taggar från data
+   */
+  getAllUniqueTags(data) {
+    const tags = new Set();
+    data.forEach((row) => {
+      if (Array.isArray(row.tags)) {
+        row.tags.forEach((tag) => tags.add(tag));
+      }
+    });
+    return Array.from(tags).sort();
+  }
+
+  /**
+   * Formatter: visar taggar som badges UTAN kryss i visningsläge
+   */
   tagFormatter(cell) {
     const tags = cell.getValue() || [];
-    if (!tags.length) return "";
+    if (tags.length === 0) return "";
     return (
       '<div class="tag-cell">' +
-      tags.map(tag => `<span class="tag-badge">${tag}</span>`).join("") +
+      tags
+        .map((tag) => `<span class="tag-badge">${tag}</span>`)
+        .join("") +
       "</div>"
     );
   }
 
+  /**
+   * Editor: lägga till/ta bort taggar med dropdown för befintliga taggar
+   * Inkluderar AJAX-hantering för taggändringar
+   */
   tagEditor(cell, onRendered, success, cancel) {
-    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()].map(t => "" + t) : [];
-    const rowData = { ...cell.getRow().getData() };
-    const entityId = rowData[this.entityType === "part" ? "prt_id" : this.entityType === "item" ? "itm_id" : "tsk_id"];
-    const overlay = document.createElement("div");
-    overlay.className = "tag-editor-overlay";
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 10000;
-    `;
-    
-    const editorBox = document.createElement("div");
-    editorBox.className = "tag-editor-box";
-    editorBox.style.cssText = `
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      max-width: 500px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-    `;
-    overlay.appendChild(editorBox);
+    const container = document.createElement("div");
+    container.className = "tag-editor-container";
 
-    const title = document.createElement("h5");
-    title.className = "tag-editor-title";
-    title.textContent = "Redigera taggar";
-    title.style.marginTop = "0";
-    editorBox.appendChild(title);
+    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
+    const originalTags = [...currentTags];
 
-    const selectedTagsSection = document.createElement("div");
-    selectedTagsSection.className = "tag-section";
-    selectedTagsSection.innerHTML = "<label>Valda taggar:</label>";
     const tagContainer = document.createElement("div");
-    tagContainer.className = "tag-container";
-    tagContainer.style.cssText = "margin: 10px 0; min-height: 40px; border: 1px solid #ddd; padding: 8px; border-radius: 4px;";
-    selectedTagsSection.appendChild(tagContainer);
-    editorBox.appendChild(selectedTagsSection);
+    tagContainer.className = "tag-display-container";
+    container.appendChild(tagContainer);
 
-    const existingTagsSection = document.createElement("div");
-    existingTagsSection.className = "tag-section";
-    existingTagsSection.innerHTML = "<label>Tillgängliga taggar (klicka för att lägga till):</label>";
-    const existingTagsContainer = document.createElement("div");
-    existingTagsContainer.className = "existing-tags-container";
-    existingTagsContainer.style.cssText = "margin: 10px 0; min-height: 40px; border: 1px solid #ddd; padding: 8px; border-radius: 4px;";
-    existingTagsSection.appendChild(existingTagsContainer);
-    editorBox.appendChild(existingTagsSection);
+    const inputContainer = document.createElement("div");
+    inputContainer.className = "input-group mt-2 position-relative";
+    container.appendChild(inputContainer);
 
-    const newTagSection = document.createElement("div");
-    newTagSection.className = "tag-section";
-    newTagSection.innerHTML = "<label>Lägg till ny tagg:</label>";
     const input = document.createElement("input");
-    input.className = "tag-input";
     input.type = "text";
-    input.placeholder = "Skriv ny tagg...";
-    input.style.cssText = "margin: 5px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;";
-    const addButton = document.createElement("button");
-    addButton.className = "btn btn-primary";
-    addButton.textContent = "Lägg till";
-    addButton.style.cssText = "margin: 5px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;";
-    newTagSection.appendChild(input);
-    newTagSection.appendChild(addButton);
-    editorBox.appendChild(newTagSection);
+    input.className = "form-control";
+    input.placeholder = "Lägg till tagg...";
+    inputContainer.appendChild(input);
 
-    const buttonContainer = document.createElement("div");
-    buttonContainer.className = "button-container";
-    buttonContainer.style.cssText = "margin-top: 20px; text-align: right;";
-    const saveButton = document.createElement("button");
-    saveButton.className = "btn btn-success";
-    saveButton.textContent = "Spara";
-    saveButton.style.cssText = "margin: 5px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;";
-    buttonContainer.appendChild(saveButton);
-    const cancelButton = document.createElement("button");
-    cancelButton.className = "btn btn-secondary";
-    cancelButton.textContent = "Avbryt";
-    cancelButton.style.cssText = "margin: 5px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;";
-    buttonContainer.appendChild(cancelButton);
-    editorBox.appendChild(buttonContainer);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-primary";
+    button.textContent = "Lägg till";
+    inputContainer.appendChild(button);
+
+    // Dropdown för befintliga taggar
+    const dropdown = document.createElement("div");
+    dropdown.className = "tag-suggestions-dropdown";
+    dropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 40px;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    `;
+    inputContainer.appendChild(dropdown);
+
+    // FIXAD - Säker hämtning av befintliga taggar
+    const getAllExistingTags = () => {
+      const allTags = new Set();
+      
+      // Kontrollera att table finns och är initialiserad
+      if (!this.table || typeof this.table.getData !== 'function') {
+        console.warn('Tabulator-instansen är inte tillgänglig');
+        return [];
+      }
+      
+      try {
+        const tableData = this.table.getData();
+        if (!Array.isArray(tableData)) {
+          console.warn('Table data är inte en array');
+          return [];
+        }
+        
+        tableData.forEach(row => {
+          if (Array.isArray(row.tags)) {
+            row.tags.forEach(tag => allTags.add(tag));
+          }
+        });
+      } catch (error) {
+        console.error('Fel vid hämtning av tabelldata:', error);
+        return [];
+      }
+      
+      return Array.from(allTags).sort();
+    };
+
+    // Uppdatera dropdown baserat på input
+    const updateDropdown = (searchText = '') => {
+      const existingTags = getAllExistingTags();
+      const filteredTags = existingTags.filter(tag => 
+        !currentTags.includes(tag) && 
+        tag.toLowerCase().includes(searchText.toLowerCase())
+      );
+
+      dropdown.innerHTML = '';
+      
+      if (filteredTags.length === 0 || searchText === '') {
+        dropdown.style.display = 'none';
+        return;
+      }
+
+      filteredTags.slice(0, 10).forEach(tag => {
+        const option = document.createElement("div");
+        option.className = "tag-suggestion-option";
+        option.style.cssText = `
+          padding: 8px 12px;
+          cursor: pointer;
+          border-bottom: 1px solid #eee;
+          transition: background-color 0.2s;
+        `;
+        option.textContent = tag;
+        
+        option.addEventListener('mouseenter', () => {
+          option.style.backgroundColor = '#f8f9fa';
+        });
+        
+        option.addEventListener('mouseleave', () => {
+          option.style.backgroundColor = 'transparent';
+        });
+        
+        option.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addTag(tag);
+          input.value = '';
+          dropdown.style.display = 'none';
+          input.focus();
+        });
+        
+        dropdown.appendChild(option);
+      });
+      
+      dropdown.style.display = 'block';
+    };
+
+    // Event listeners för input
+    input.addEventListener('input', (e) => {
+      updateDropdown(e.target.value);
+    });
+
+    input.addEventListener('focus', (e) => {
+      if (e.target.value) {
+        updateDropdown(e.target.value);
+      }
+    });
+
+    // Dölj dropdown när man klickar utanför
+    document.addEventListener('click', (e) => {
+      if (!inputContainer.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    // Hantera piltangenter för navigation
+    input.addEventListener('keydown', (e) => {
+      const options = dropdown.querySelectorAll('.tag-suggestion-option');
+      
+      if (e.key === 'ArrowDown' && options.length > 0) {
+        e.preventDefault();
+        const activeOption = dropdown.querySelector('.active') || options[0];
+        const currentIndex = Array.from(options).indexOf(activeOption);
+        const nextIndex = Math.min(currentIndex + 1, options.length - 1);
+        
+        options.forEach(opt => opt.classList.remove('active'));
+        options[nextIndex].classList.add('active');
+        options[nextIndex].style.backgroundColor = '#007bff';
+        options[nextIndex].style.color = 'white';
+      }
+      
+      if (e.key === 'ArrowUp' && options.length > 0) {
+        e.preventDefault();
+        const activeOption = dropdown.querySelector('.active');
+        if (activeOption) {
+          const currentIndex = Array.from(options).indexOf(activeOption);
+          const prevIndex = Math.max(currentIndex - 1, 0);
+          
+          options.forEach(opt => {
+            opt.classList.remove('active');
+            opt.style.backgroundColor = 'transparent';
+            opt.style.color = 'inherit';
+          });
+          options[prevIndex].classList.add('active');
+          options[prevIndex].style.backgroundColor = '#007bff';
+          options[prevIndex].style.color = 'white';
+        }
+      }
+      
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const activeOption = dropdown.querySelector('.active');
+        if (activeOption) {
+          addTag(activeOption.textContent);
+          input.value = '';
+          dropdown.style.display = 'none';
+        } else {
+          addTag(input.value.trim());
+          input.value = '';
+          dropdown.style.display = 'none';
+        }
+      }
+      
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+        input.blur();
+      }
+    });
+
+    const addTag = (tag) => {
+      if (tag && !currentTags.includes(tag)) {
+        currentTags.push(tag);
+        updateTagDisplay();
+      }
+    };
+
+    const removeTag = (tag) => {
+      const idx = currentTags.indexOf(tag);
+      if (idx > -1) {
+        currentTags.splice(idx, 1);
+        updateTagDisplay();
+      }
+    };
 
     const updateTagDisplay = () => {
       tagContainer.innerHTML = "";
-      if (!currentTags.length) {
-        const emptySpan = document.createElement("span");
-        emptySpan.className = "empty-state";
-        emptySpan.textContent = "Inga taggar tillagda";
-        emptySpan.style.color = "#999";
-        tagContainer.appendChild(emptySpan);
-      } else {
-        currentTags.forEach(tag => {
-          const tagEl = document.createElement("span");
-          tagEl.className = "tag-item selected";
-          tagEl.style.cssText = "display: inline-block; background: #007bff; color: white; padding: 4px 8px; margin: 2px; border-radius: 4px; cursor: pointer;";
-          tagEl.title = "Klicka för att ta bort";
-          tagEl.textContent = tag;
-          tagEl.addEventListener("click", () => {
-            currentTags = currentTags.filter(t => t !== tag);
-            updateTagDisplay();
-          });
-          tagContainer.appendChild(tagEl);
-        });
+
+      if (currentTags.length === 0) {
+        const emptyMessage = document.createElement("div");
+        emptyMessage.className = "text-muted small p-2";
+        emptyMessage.textContent = "Inga taggar tillagda";
+        tagContainer.appendChild(emptyMessage);
+        return;
       }
-      updateExistingTagsDisplay();
-    };
-    
-    const updateExistingTagsDisplay = () => {
-      const allTags = this.getAllTags();
-      existingTagsContainer.innerHTML = "";
-      const availableTags = allTags.filter(tag => !currentTags.includes(tag));
-      if (!availableTags.length) {
-        const empty = document.createElement("span");
-        empty.className = "empty-state";
-        empty.textContent = "Alla tillgängliga taggar är redan tillagda";
-        empty.style.color = "#999";
-        existingTagsContainer.appendChild(empty);
-      } else {
-        availableTags.forEach(tag => {
-          const tagEl = document.createElement("span");
-          tagEl.className = "tag-item available";
-          tagEl.style.cssText = "display: inline-block; background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; padding: 4px 8px; margin: 2px; border-radius: 4px; cursor: pointer;";
-          tagEl.textContent = tag;
-          tagEl.title = "Klicka för att lägga till";
-          tagEl.addEventListener("click", () => {
-            currentTags.push(tag);
-            updateTagDisplay();
-          });
-          existingTagsContainer.appendChild(tagEl);
+
+      currentTags.forEach((tag) => {
+        const tagElement = document.createElement("div");
+        tagElement.className = "tag-badge d-inline-flex align-items-center";
+
+        const tagText = document.createElement("span");
+        tagText.textContent = tag;
+        tagElement.appendChild(tagText);
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "btn-close btn-close-white ms-1 remove-tag-btn";
+        removeButton.setAttribute("data-tag", tag);
+        removeButton.setAttribute("tabindex", "-1");
+        removeButton.setAttribute("aria-label", "Ta bort");
+        removeButton.addEventListener("click", function (e) {
+          e.stopPropagation();
+          removeTag(tag);
         });
-      }
+
+        tagElement.appendChild(removeButton);
+        tagContainer.appendChild(tagElement);
+      });
     };
 
-    function isValidTag(tag) {
-      if (!tag) return false;
-      if (typeof tag !== "string") tag = String(tag);
-      if (!tag.trim()) return false;
-      if (currentTags.includes(tag.trim())) return false;
-      return true;
-    }
+    updateTagDisplay();
 
-    addButton.addEventListener("click", () => {
-      let newTag = input.value.trim();
-      if (isValidTag(newTag)) {
-        currentTags.push(newTag);
-        input.value = "";
-        updateTagDisplay();
-      }
+    button.addEventListener("click", function () {
+      addTag(input.value.trim());
       input.value = "";
+      dropdown.style.display = 'none';
       input.focus();
     });
-    input.addEventListener("keypress", e => {
-      if (e.key === "Enter") addButton.click();
-    });
 
-    saveButton.addEventListener("click", () => {
-      try {
-        const newTags = [...currentTags];
-        let entityObj = this.findEntityById(entityId);
-        if (entityObj) {
-          entityObj[this.tagField] = [...newTags];
+    // FIXAD - Använd arrow function för att bevara this-kontext
+    // Lägg till AJAX-hantering när taggar ändras
+    container.addEventListener("focusout", (e) => {
+      setTimeout(() => {
+        if (!container.contains(document.activeElement)) {
+          success(currentTags);
+          const tagsChanged = JSON.stringify(originalTags) !== JSON.stringify(currentTags);
+          if (tagsChanged) {
+            // Säker kontroll av table-instans
+            if (this.table && typeof this.table.getData === 'function') {
+              setTimeout(() => {
+                try {
+                  this.table.setData(this.table.getData());
+                } catch (error) {
+                  console.error('Fel vid uppdatering av tabelldata:', error);
+                }
+              }, 10);
+            }
+            
+            // AJAX-anrop för taggändring (hanteras av den omslutande koden)
+            console.log('Taggar ändrade:', {
+              old: originalTags,
+              new: currentTags,
+              rowData: cell.getRow().getData()
+            });
+          }
         }
-        this.invalidateTagsCache();
-        const oldTags = Array.isArray(rowData[this.tagField]) ? [...rowData[this.tagField]] : [];
-        this.handleTagUpdate(entityId, newTags, oldTags);
-
-        document.removeEventListener("keydown", handleEscape);
-
-        success(newTags);
-
-        // Ta bort overlay ur DOM (eftersom Tabulator inte gör det)
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-
-        // Tvinga en uppdatering av tabellen
-        setTimeout(() => {
-          this.table.redraw();
-        }, 100);
-
-      } catch (err) {
-        if (window?.console) console.error("Overlay save error:", err);
-        alert("Ett fel uppstod när taggar skulle sparas. Se konsollen för detaljer.");
-      }
+      }, 200);
     });
 
-    cancelButton.addEventListener("click", () => {
-      document.removeEventListener("keydown", handleEscape);
-      cancel();
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    onRendered(function () {
+      input.focus();
+      const cellRect = cell.getElement().getBoundingClientRect();
+      container.style.minWidth = Math.max(cellRect.width, 250) + "px";
+      container.style.position = "absolute";
     });
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        document.removeEventListener("keydown", handleEscape);
-        cancel();
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      }
-    });
-    const handleEscape = (e) => {
-      if (e.key === "Escape") {
-        document.removeEventListener("keydown", handleEscape);
-        cancel();
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      }
-    };
-    document.addEventListener("keydown", handleEscape);
 
-    document.body.appendChild(overlay);
-    updateTagDisplay();
-    setTimeout(() => input.focus(), 100);
-
-    onRendered(() => {});
-    return document.createElement("div");
+    return container;
   }
 
-  headerFilterElement(cell, onRendered, success, cancel, editorParams) {
+  /**
+   * Custom Tag HeaderFilter med AND/OR-logik
+   */
+  customTagHeaderFilter(headerValue, rowValue, rowData, filterParams) {
+    if (this.debugMode) {
+      console.log('=== TAG SYSTEM FILTER CHECK ===');
+      console.log('Row:', rowData.namn || rowData.itm_name || rowData.prt_name || rowData.tsk_name);
+      console.log('Selected filter tags:', headerValue);
+      console.log('Row tags:', rowValue);
+      console.log('Filter logic:', this.filterLogic);
+    }
+
+    if (!headerValue || !Array.isArray(headerValue) || headerValue.length === 0) {
+      if (this.debugMode) console.log('No filter active - showing row');
+      return true;
+    }
+    
+    if (!Array.isArray(rowValue) || rowValue.length === 0) {
+      if (this.debugMode) console.log('Row has no tags - hiding row');
+      return false;
+    }
+    
+    let result;
+    
+    if (this.filterLogic === 'AND') {
+      result = headerValue.every((selectedTag) => rowValue.includes(selectedTag));
+    } else {
+      result = headerValue.some((selectedTag) => rowValue.includes(selectedTag));
+    }
+    
+    if (this.debugMode) {
+      console.log(`Final result (${this.filterLogic} logic - show row):`, result);
+      console.log('===================');
+    }
+    
+    return result;
+  }
+
+  /**
+   * Custom Tag Header Filter Element
+   * FIX: Gör contains-check på logicToggle istället för === så AND/OR-knappen funkar oavsett var på knappen man klickar
+   */
+  customTagHeaderFilterElement(cell, onRendered, success, cancel, editorParams) {
     const container = document.createElement("div");
     container.className = "custom-tag-header-filter";
-    container.style.cssText = "position: relative; width: 100%;";
-    
+
     const button = document.createElement("div");
     button.className = "tag-filter-button";
-    button.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background: white;
-      cursor: pointer;
-      min-height: 30px;
-    `;
     container.appendChild(button);
 
     const selectedContainer = document.createElement("div");
     selectedContainer.className = "tag-filter-selected";
-    selectedContainer.style.cssText = "flex-grow: 1; overflow: hidden;";
     button.appendChild(selectedContainer);
 
-    const controlsContainer = document.createElement("div");
-    controlsContainer.style.cssText = "display: flex; align-items: center; gap: 4px; margin-left: 8px;";
-    button.appendChild(controlsContainer);
+    const placeholder = document.createElement("span");
+    placeholder.className = "tag-filter-placeholder";
+    placeholder.textContent = "Filtrera taggar...";
+    selectedContainer.appendChild(placeholder);
 
+    // AND/OR Toggle Button med konfigurerbar HTML
     const logicToggle = document.createElement("button");
     logicToggle.className = "tag-filter-logic-toggle";
-    logicToggle.textContent = this.filterLogic;
-    logicToggle.style.cssText = `
-      padding: 2px 6px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      background: #f8f9fa;
-      font-size: 11px;
-      cursor: pointer;
-    `;
-    controlsContainer.appendChild(logicToggle);
+    logicToggle.style.display = "none";
+    button.appendChild(logicToggle);
 
     const clearButton = document.createElement("button");
     clearButton.className = "tag-filter-clear";
     clearButton.innerHTML = "×";
     clearButton.title = "Rensa filter";
-    clearButton.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border: none;
-      border-radius: 50%;
-      background: #dc3545;
-      color: white;
-      font-size: 12px;
-      cursor: pointer;
-      display: none;
-    `;
-    controlsContainer.appendChild(clearButton);
+    clearButton.style.display = "none";
+    button.appendChild(clearButton);
 
+    const arrow = document.createElement("div");
+    arrow.className = "tag-filter-arrow";
+    button.appendChild(arrow);
+
+    // Overlay-baserad dropdown
     const dropdown = document.createElement("div");
     dropdown.className = "tag-filter-dropdown-fixed";
-    dropdown.style.cssText = `
-     //  position: absolute;
-     //  top: 100%;
-  //    left: 0;
-      right:40px;
-   //   z-index: 10000;
-   //   background: white;
-   //  border: 1px solid #ddd;
-    //  border-top: none;
-    //  border-radius: 0 0 4px 4px;
-     // max-height: 200px;
-     // overflow-y: auto;
-    //  display: none;
-     // box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    `;
-    container.appendChild(dropdown);
+    dropdown.style.display = "none";
 
-    let isOpen = false;
+    let overlay = null;
     let selectedTags = [];
-    let allTags = this.getAllTags();
+    let isOpen = false;
+    let allTags = this.getAllUniqueTags(this.table.getData());
+
+    // Funktion för att uppdatera toggle-knappen med konfigurerbar HTML
+    const updateLogicToggleDisplay = () => {
+      const config = this.toggleConfig[this.filterLogic];
+      
+      logicToggle.innerHTML = config.html;
+      logicToggle.title = config.title;
+      const isActive = selectedTags.length > 0;
+      logicToggle.style.cssText = isActive ? config.activeStyle : config.inactiveStyle;
+    };
 
     const updateDisplay = () => {
       selectedContainer.innerHTML = "";
-      if (!selectedTags.length) {
+      if (selectedTags.length === 0) {
         const placeholder = document.createElement("span");
         placeholder.className = "tag-filter-placeholder";
         placeholder.textContent = "Filtrera taggar...";
-        placeholder.style.cssText = "color: #999; font-style: italic;";
         selectedContainer.appendChild(placeholder);
         clearButton.style.display = "none";
+        logicToggle.style.display = "block";
       } else {
         selectedTags.forEach(tag => {
           const tagBadge = document.createElement("span");
           tagBadge.className = "tag-badge";
           tagBadge.textContent = tag;
-          tagBadge.style.cssText = "display: inline-block; background: #007bff; color: white; padding: 2px 6px; margin: 1px; border-radius: 3px; font-size: 11px;";
           selectedContainer.appendChild(tagBadge);
         });
         clearButton.style.display = "block";
+        logicToggle.style.display = "block";
       }
-      logicToggle.textContent = this.filterLogic;
+      updateLogicToggleDisplay();
     };
 
     const updateDropdown = () => {
-      allTags = this.getAllTags();
       dropdown.innerHTML = "";
-      
-      if (!allTags.length) {
-        const noOptions = document.createElement("div");
-        noOptions.textContent = "Inga taggar tillgängliga";
-        noOptions.style.cssText = "padding: 8px; color: #999; font-style: italic;";
-        dropdown.appendChild(noOptions);
-        return;
-      }
-      
       allTags.forEach(tag => {
         const option = document.createElement("div");
         option.className = "tag-filter-option";
         option.textContent = tag;
-        option.style.cssText = `
-          padding: 8px;
-          cursor: pointer;
-          border-bottom: 1px solid #eee;
-          ${selectedTags.includes(tag) ? 'background: #007bff; color: white;' : 'background: white; color: #333;'}
-        `;
-        option.addEventListener("mouseenter", () => {
-          if (!selectedTags.includes(tag)) {
-            option.style.background = "#f8f9fa";
-          }
-        });
-        option.addEventListener("mouseleave", () => {
-          if (!selectedTags.includes(tag)) {
-            option.style.background = "white";
-          }
-        });
-        option.addEventListener("click", e => {
+        if (selectedTags.includes(tag)) {
+          option.classList.add("selected");
+        }
+        option.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (selectedTags.includes(tag)) {
-            selectedTags = selectedTags.filter(t => t !== tag);
-          } else {
-            selectedTags.push(tag);
-          }
-          updateDisplay();
-          updateDropdown();
-          success(selectedTags.length ? [...selectedTags] : null);
+          toggleTag(tag);
         });
         dropdown.appendChild(option);
       });
     };
 
-    const toggleDropdown = (e) => {
-      e.stopPropagation();
-      isOpen = !isOpen;
-      if (isOpen) {
-        updateDropdown();
-        dropdown.style.display = "block";
+    const toggleTag = (tag) => {
+      const index = selectedTags.indexOf(tag);
+      if (index > -1) {
+        selectedTags.splice(index, 1);
       } else {
-        dropdown.style.display = "none";
+        selectedTags.push(tag);
       }
+      this.currentFilter = [...selectedTags];
+      updateDisplay();
+      updateDropdown();
+      const filterValue = selectedTags.length > 0 ? [...selectedTags] : null;
+      success(filterValue);
+      this.updateDebugInfo(selectedTags);
     };
 
     const closeDropdown = () => {
       isOpen = false;
       dropdown.style.display = "none";
+      if (overlay) {
+        overlay.remove();
+        overlay = null;
+      }
+      arrow.classList.remove("open");
     };
 
-    // Event listeners
-    button.addEventListener("click", (e) => {
-      if (e.target === logicToggle) {
-        e.stopPropagation();
-        this.filterLogic = this.filterLogic === "AND" ? "OR" : "AND";
-        logicToggle.textContent = this.filterLogic;
-        if (selectedTags.length) {
-          success([...selectedTags]);
-        }
-        return;
-      }
-      if (e.target === clearButton) {
-        e.stopPropagation();
-        selectedTags = [];
-        updateDisplay();
-        success(null);
+    const toggleDropdown = () => {
+      if (isOpen) {
         closeDropdown();
         return;
       }
-      toggleDropdown(e);
+      isOpen = true;
+      arrow.classList.add("open");
+      allTags = this.getAllUniqueTags(this.table.getData());
+      overlay = document.createElement("div");
+      overlay.className = "dropdown-overlay";
+      document.body.appendChild(overlay);
+      document.body.appendChild(dropdown);
+      const rect = button.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.top = (rect.bottom + 2) + 'px';
+      dropdown.style.left = rect.left + 'px';
+      dropdown.style.width = rect.width + 'px';
+      dropdown.style.display = 'block';
+      dropdown.style.zIndex = '99999';
+      updateDropdown();
+      overlay.addEventListener("click", closeDropdown);
+    };
+
+    // ----------- FIX: contains istället för === här! ------------
+    button.addEventListener("click", (e) => {
+      // Hantera logic toggle
+      if (logicToggle.contains(e.target)) {
+        e.stopPropagation();
+        this.filterLogic = this.filterLogic === 'AND' ? 'OR' : 'AND';
+        updateDisplay();
+        if (selectedTags.length > 0) this.table.refreshFilter();
+        this.updateDebugInfo(selectedTags);
+        return;
+      }
+      // Hantera clear button
+      if (clearButton.contains(e.target)) {
+        e.stopPropagation();
+        selectedTags = [];
+        this.currentFilter = [];
+        updateDisplay();
+        success(null);
+        this.updateDebugInfo(selectedTags);
+        return;
+      }
+      // Öppna dropdown
+      toggleDropdown();
     });
 
-    // Stäng dropdown när man klickar utanför
+    clearButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectedTags = [];
+      this.currentFilter = [];
+      updateDisplay();
+      success(null);
+      this.updateDebugInfo(selectedTags);
+    });
+
+    // Close dropdown when clicking outside
     document.addEventListener("click", (e) => {
-      if (!container.contains(e.target)) {
+      if (!container.contains(e.target) && !dropdown.contains(e.target) && isOpen) {
         closeDropdown();
       }
     });
@@ -553,30 +663,92 @@ class TagSystemUtils {
     const initialValue = cell.getValue();
     if (initialValue && Array.isArray(initialValue)) {
       selectedTags = [...initialValue];
+      this.currentFilter = [...selectedTags];
     }
 
     onRendered(() => {
       updateDisplay();
-      // Se till att vi har färska taggar när komponenten renderas
-      setTimeout(() => {
-        this.invalidateTagsCache();
-        allTags = this.getAllTags();
-      }, 100);
     });
 
     return container;
   }
 
-  headerFilterFunc(headerValue, rowValue, rowData, filterParams) {
-    if (!headerValue || !Array.isArray(headerValue) || !headerValue.length) return true;
-    if (!Array.isArray(rowValue) || !rowValue.length) return false;
-    
-    if (this.filterLogic === "AND") {
-      return headerValue.every(tag => rowValue.includes(tag));
-    } else {
-      return headerValue.some(tag => rowValue.includes(tag));
+  /**
+   * Rensa alla filter
+   */
+  clearFilters() {
+    this.currentFilter = [];
+    this.table.clearHeaderFilter();
+    this.updateDebugInfo([]);
+  }
+
+  /**
+   * Växla debug-läge
+   */
+  toggleDebug() {
+    this.debugMode = !this.debugMode;
+    const debugInfo = document.getElementById('debug-info-tag-system');
+    if (debugInfo) {
+      debugInfo.style.display = this.debugMode ? 'block' : 'none';
     }
+    if (this.debugMode) {
+      this.updateDebugInfo(this.currentFilter);
+    }
+  }
+
+  /**
+   * Sätt filter-logik
+   */
+  setFilterLogic(logic) {
+    this.filterLogic = logic;
+  }
+
+  /**
+   * Hämta nuvarande filter-logik
+   */
+  getFilterLogic() {
+    return this.filterLogic;
+  }
+
+  /**
+   * Hämta nuvarande filter
+   */
+  getCurrentFilter() {
+    return [...this.currentFilter];
+  }
+
+  /**
+   * Kontrollera om debug-läge är aktivt
+   */
+  isDebugMode() {
+    return this.debugMode;
+  }
+
+  /**
+   * Hämta toggle-konfiguration
+   */
+  getToggleConfig() {
+    return this.toggleConfig;
+  }
+
+  /**
+   * Hämta kolumn-konfiguration för Tabulator
+   * Inkluderar AJAX-hantering om callback är satt
+   */
+  getColumnConfig(fieldName = 'tags') {
+    return {
+      title: "Taggar",
+      field: fieldName,
+      formatter: this.tagFormatter.bind(this),
+      editor: this.tagEditor.bind(this),
+      headerFilter: this.customTagHeaderFilterElement.bind(this),
+      headerFilterFunc: this.customTagHeaderFilter.bind(this),
+      headerFilterEmptyCheck: function (value) {
+        return !value || !Array.isArray(value) || value.length === 0;
+      }
+    };
   }
 }
 
+// Exportera som default export för ES6 modules
 export default TagSystemUtils;
