@@ -1,7 +1,6 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Robust, kapslad, och nu skyddad mot dubletter, tomma taggar, race och overlay-stängningsproblem.
- * Extra: smartare felhantering vid Tabulator-update/redraw.
+ * Robust, kapslad, felhanterad och Tabulator-kompatibel overlay-hantering!
  */
 class TagSystemUtils {
   static #initializedTables = new WeakSet();
@@ -255,6 +254,7 @@ class TagSystemUtils {
       if (e.key === "Enter") addButton.click();
     });
 
+    // --- Save enligt Tabulator best practice ---
     saveButton.addEventListener("click", () => {
       try {
         const newTags = [...currentTags];
@@ -267,32 +267,11 @@ class TagSystemUtils {
         this.handleTagUpdate(entityId, newTags, oldTags);
 
         document.removeEventListener("keydown", handleEscape);
-        try {
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        } catch (err) {}
 
-        try {
-          const rowObj = cell.getRow();
-          if (rowObj && rowObj._row && !rowObj._row.deleted) {
-            rowObj.update({ ...rowObj.getData(), [this.tagField]: [...newTags] });
-          }
-          if (this.table && typeof this.table.redraw === "function") this.table.redraw(true);
-          if (this.table && typeof this.table.refreshFilter === "function") this.table.refreshFilter();
-        } catch (err) {
-          if (err && err.message && err.message.match(/row.*not found|No row with/gi)) {
-            if (window?.console) console.warn("Tabulator: raden saknas vid update/redraw.", err && err.message ? err.message : err);
-          } else if (window?.console) {
-            if (err && err.stack) {
-              console.error("Tabulator update/redraw error:", err, err.stack);
-            } else {
-              console.error("Tabulator update/redraw error:", err && err.message ? err.message : err);
-            }
-          }
-        }
+        // Kalla endast success, låt Tabulator städa overlay/editor!
+        success(newTags);
 
-        try {
-          success(newTags);
-        } catch (err) {}
+        // All eventuell redraw/refreshFilter hanteras i cellEdited-listener på tabellen!
       } catch (err) {
         if (window?.console) console.error("Overlay save error:", err);
         alert("Ett fel uppstod när taggar skulle sparas. Se konsollen för detaljer.");
@@ -301,26 +280,17 @@ class TagSystemUtils {
 
     cancelButton.addEventListener("click", () => {
       document.removeEventListener("keydown", handleEscape);
-      try {
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      } catch (err) {}
       cancel();
     });
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         document.removeEventListener("keydown", handleEscape);
-        try {
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        } catch (err) {}
         cancel();
       }
     });
     const handleEscape = (e) => {
       if (e.key === "Escape") {
         document.removeEventListener("keydown", handleEscape);
-        try {
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        } catch (err) {}
         cancel();
       }
     };
