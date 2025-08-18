@@ -1,6 +1,7 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Overlayen tas bort manuellt vid spara/avbryt!
+ * Overlayen tas bort manuellt vid spara/avbryt och 
+ * raden/cellen får sitt nya värde direkt efter stängning!
  */
 class TagSystemUtils {
   static #initializedTables = new WeakSet();
@@ -271,6 +272,14 @@ class TagSystemUtils {
 
         // Ta bort overlay ur DOM (eftersom Tabulator inte gör det)
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+        // UPPDATERA RADEN/CELLEN DIREKT SÅ TAGGEN VISAS!
+        setTimeout(() => {
+          const rowObj = cell.getRow();
+          if (rowObj) {
+            rowObj.update({ ...rowObj.getData(), [this.tagField]: [...newTags] });
+          }
+        }, 10);
 
       } catch (err) {
         if (window?.console) console.error("Overlay save error:", err);
