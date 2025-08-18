@@ -3,7 +3,7 @@ import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@713f
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
-import TagSystemUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@b43120e714da428faa51f50469ce064a7fc26292/tagSystemUtils.js";
+import TagSystemUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@c741cafacd5aef45990129245cef531e3e4fbbd0/tagSystemUtils.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält) =======
 const data = [
@@ -108,53 +108,24 @@ const findItemById = (proj, itm_id) => {
   }
   return null;
 };
-
-const findTaskById = (proj, tsk_id) => {
-  for (const part of proj.prt_parts || []) {
-    for (const item of part.prt_items || []) {
-      const found = (item.itm_tasks || []).find(t => t.tsk_id === tsk_id);
-      if (found) return found;
-    }
-  }
-  return null;
-};
-
-const findPartById = (proj, prt_id) => {
-  return (proj.prt_parts || []).find(p => p.prt_id === prt_id);
-};
-
-const getNextId = (collection, idField) => (collection.length ? Math.max(...collection.map(i => +i[idField] || 0)) + 1 : 1);
-const getNextPartId = () => getNextId(project.prt_parts || [], "prt_id");
-const getNextItemId = () => getNextId(project.prt_parts?.flatMap(p => p.prt_items || []) || [], "itm_id");
-const getNextTaskId = () => getNextId(project.prt_parts?.flatMap(p => (p.prt_items || []).flatMap(i => i.itm_tasks || [])) || [], "tsk_id");
-const formatMoney = { formatter: "money", formatterParams: { symbol: "kr", precision: 2, thousand: " " } };
-const formatHours = cell => `${(Number(cell.getValue()) || 0).toFixed(2)} h`;
-const confirmMsg = msg => window.confirm(msg);
-
-// ======= TAGG-AJAX FUNKTIONER =======
-const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
-  // Skicka AJAX-anrop för tagguppdatering
-  const ajaxData = {
-    action: "updateTags",
-    entityType: entityType, // "part", "item", eller "task"
-    entityId: entityId,
-    tags: newTags,
-    oldTags: oldTags
-  };
-  ajaxHandler.queuedEchoAjax(ajaxData);
-};
-
-// ======= GEMENSAM KOLUMN =======
-const deleteColumn = (cellClick) => ({ title: "", formatter: () => "🗑️", width: 50, hozAlign: "center", cellClick, headerSort: false });
+const findPartById = (proj, prt_id) =>
+  (proj.prt_parts || []).find(p => p.prt_id === prt_id);
 
 // ======= TABELLKONFIGURATION =======
+const deleteColumn = (cellClick) => ({
+  title: "", formatter: () => "🗑️", width: 50, hozAlign: "center", cellClick, headerSort: false
+});
+const formatMoney = { formatter: "money", formatterParams: { symbol: "kr", precision: 2, thousand: " " } };
+const formatHours = cell => `${(Number(cell.getValue()) || 0).toFixed(2)} h`;
+
 const getPartTableColumns = () => [
   deleteColumn(handleDeletePart),
   { title: "Markerad", field: "selected", formatter: "tickCross", editor: true, headerSort: false, width: 80, cellEdited: () => applyPartFilter() },
   { title: "Part-ID", field: "prt_id", width: 80 },
   { title: "Part-namn", field: "prt_name", editor: "input", cellEdited: updatePartName },
   { title: "Materialpris Tot", field: "prt_material_user_price_total", ...formatMoney },
-  { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: formatHours }
+  { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: formatHours },
+  // Taggar kolumn läggs till via TagSystemUtils
 ];
 
 const getItemTableColumns = () => [
@@ -181,10 +152,10 @@ const getItemTableColumns = () => [
   { title: "Materialpris", field: "itm_material_user_price", ...formatMoney },
   { title: "Materialpris Tot", field: "itm_material_user_price_total", ...formatMoney },
   { title: "Arbetstid", field: "itm_work_task_duration", formatter: formatHours },
-  { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: formatHours }
+  { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: formatHours },
+  // Taggar kolumn läggs till via TagSystemUtils
 ];
 
-// För Task-table, lägger till taggar senare så ingen tagg-kolumn här
 const getTaskTableColumns = () => [
   deleteColumn((e, cell) => handleDeleteTask(cell, cell.getRow().getData().tsk_itm_id)),
   { title: "Task-ID", field: "tsk_id", width: 70 },
@@ -194,84 +165,56 @@ const getTaskTableColumns = () => [
   { title: "Material Price", field: "tsk_material_user_price", editor: "number", cellEdited: updateTaskCell },
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: updateTaskCell },
-  { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: formatHours }
+  { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: formatHours },
+  // Taggar kolumn läggs till via TagSystemUtils
 ];
 
-// ======= DELETE HANDLERS =======
-const handleDeletePart = (_e, cell) => {
+// ======= DELETE HANDLERS, UPPDATERING, ETC =======
+function handleDeletePart(_e, cell) {
   const { prt_id, prt_name } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort part "${prt_name}" och allt underliggande?`)) return;
+  if (!window.confirm(`Vill du verkligen ta bort part "${prt_name}" och allt underliggande?`)) return;
   project.prt_parts = (project.prt_parts || []).filter(p => p.prt_id !== prt_id);
   partTable?.deleteRow(prt_id);
   (itemTable?.getData() || []).filter(i => i.itm_prt_id === prt_id).forEach(i => itemTable.deleteRow(i.itm_id));
   calcUtils.updateAllData(project); updatePartOptions(); applyPartFilter(); itemTable?.redraw(true);
   ajaxHandler.queuedEchoAjax({ prt_id, action: "deletePart" });
-};
+}
 
-const handleDeleteItem = (_e, cell) => {
+function handleDeleteItem(_e, cell) {
   const { itm_id, itm_name, itm_prt_id } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort item "${itm_name}" och dess tasks?`)) return;
+  if (!window.confirm(`Vill du verkligen ta bort item "${itm_name}" och dess tasks?`)) return;
   const part = project.prt_parts?.find(p => p.prt_id === itm_prt_id); if (!part) return;
   part.prt_items = (part.prt_items || []).filter(i => i.itm_id !== itm_id);
   itemTable?.deleteRow(itm_id);
   subtableToggle.openItemRows.delete(itm_id);
   calcUtils.updateAllData(project); partTable.getRow(itm_prt_id)?.update(part); applyPartFilter();
   ajaxHandler.queuedEchoAjax({ itm_id, action: "deleteItem" });
-};
+}
 
-const handleDeleteTask = (cell, itm_id) => {
+function handleDeleteTask(cell, itm_id) {
   const { tsk_id, tsk_name } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort task "${tsk_name}"?`)) return;
+  if (!window.confirm(`Vill du verkligen ta bort task "${tsk_name}"?`)) return;
   const item = findItemById(project, itm_id); if (!item) return;
   item.itm_tasks = (item.itm_tasks || []).filter(t => t.tsk_id !== tsk_id);
   const itemRow = itemTable.getRow(itm_id); itemRow?._subTaskTable?.deleteRow(tsk_id);
   calcUtils.updateAllData(project); updateDataAndRefresh(item);
   ajaxHandler.queuedEchoAjax({ tsk_id, action: "deleteTask" });
-};
-
-// ======= TABELLER =======
-const setupTables = () => {
-  partTable = new Tabulator("#part-table", {
-    index: "prt_id", data: project.prt_parts || [], layout: "fitDataFill", columns: getPartTableColumns(),
-    footerElement: uiHelpers.createFooterButton("Lägg till Part", addPartRow),
-    rowFormatter: (row) => partColors.applyPartColorToRow(row, row.getData().prt_id)
-  });
-
-  itemTable = new Tabulator("#item-table", {
-    index: "itm_id", data: calcUtils.getAllItemsWithPartRef(project.prt_parts), layout: "fitDataFill",
-    columns: getItemTableColumns(), footerElement: uiHelpers.createFooterButton("Lägg till Item", addItemRow),
-    rowFormatter: (row) => {
-      const d = row.getData(), itm_id = d.itm_id, partId = d.itm_prt_id; partColors.applyPartColorToRow(row, partId);
-      let holderEl = row.getElement().querySelector(".subtable-holder");
-      if (!holderEl) {
-        holderEl = document.createElement("div"); holderEl.className = "subtable-holder";
-        holderEl.style.display = subtableToggle.openItemRows.has(itm_id) ? "block" : "none"; row.getElement().appendChild(holderEl);
-        if ((d.itm_tasks || []).length) {
-          const taskDiv = document.createElement("div"); holderEl.appendChild(taskDiv);
-          const taskTable = new Tabulator(taskDiv, {
-            index: "tsk_id", data: d.itm_tasks, layout: "fitDataFill", columns: getTaskTableColumns(),
-            footerElement: uiHelpers.createFooterButton("Lägg till Task", () => addTaskRow(d)),
-            rowFormatter: (taskRow) => partColors.applyPartColorToRow(taskRow, partId)
-          });
-          row._subTaskTable = taskTable;
-          addTagsToTable(taskTable, "task");
-        } else holderEl.appendChild(uiHelpers.createFooterButton("Lägg till Task", () => addTaskRow(d)));
-      } else holderEl.style.display = subtableToggle.openItemRows.has(itm_id) ? "block" : "none";
-      subtableToggle.restoreToggleState(row);
-    }
-  });
-  itemTable.on("tableBuilt", () => { applyPartFilter(); updatePartOptions(); });
-};
+}
 
 // ======= LÄGG TILL-RADER =======
-const addPartRow = () => {
+function getNextId(collection, idField) { return collection.length ? Math.max(...collection.map(i => +i[idField] || 0)) + 1 : 1; }
+const getNextPartId = () => getNextId(project.prt_parts || [], "prt_id");
+const getNextItemId = () => getNextId(project.prt_parts?.flatMap(p => p.prt_items || []) || [], "itm_id");
+const getNextTaskId = () => getNextId(project.prt_parts?.flatMap(p => (p.prt_items || []).flatMap(i => i.itm_tasks || [])) || [], "tsk_id");
+
+function addPartRow() {
   const newId = getNextPartId(), newPart = { prt_id: newId, prt_prj_id: project.prj_id, prt_name: `Ny Part ${newId}`, prt_items: [], selected: true, prt_tags: [] };
   (project.prt_parts ||= []).push(newPart); calcUtils.updateAllData(project); partTable.addRow(newPart); updatePartOptions(); applyPartFilter();
   ajaxHandler.queuedEchoAjax({ prt_id: newId, prt_name: newPart.prt_name, action: "addPart" });
   setTimeout(() => partTable.getRow(newId)?.getCell("prt_name").edit(), 0);
-};
+}
 
-const addItemRow = () => {
+function addItemRow() {
   const newId = getNextItemId(), targetPart = project.prt_parts?.find(p => p.selected) || project.prt_parts?.[0];
   if (!targetPart) return ajaxHandler.showUserError("Skapa först en Part.");
   const newTaskId = getNextTaskId(), newTask = { tsk_id: newTaskId, tsk_itm_id: newId, tsk_name: `Ny Task ${newTaskId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [] };
@@ -280,22 +223,24 @@ const addItemRow = () => {
   ajaxHandler.queuedEchoAjax({ itm_id: newId, itm_name: newItem.itm_name, action: "addItem" });
   ajaxHandler.queuedEchoAjax({ tsk_id: newTaskId, tsk_name: newTask.tsk_name, itm_id: newId, action: "addTask" });
   setTimeout(() => itemTable.getRow(newId)?.getCell("itm_name").edit(), 0);
-};
+}
 
-const addTaskRow = (itemData) => {
+function addTaskRow(itemData) {
   const newId = getNextTaskId(), newTask = { tsk_id: newId, tsk_itm_id: itemData.itm_id, tsk_name: `Ny Task ${newId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [] };
   const item = findItemById(project, itemData.itm_id); if (!item) return;
   (item.itm_tasks ||= []).push(newTask); calcUtils.updateAllData(project);
   const itemRow = itemTable.getRow(itemData.itm_id); if (!itemRow) return;
   if (itemRow._subTaskTable) {
     itemRow._subTaskTable.addRow(newTask);
+    // Återinitiera taggar på subtabell (race-säkert)
+    TagSystemUtils.attachToTable(itemRow._subTaskTable, project, "task", ajaxHandler);
   } else {
     itemTable.redraw(true);
   }
   updateDataAndRefresh(item); subtableToggle.openItemRows.add(itemData.itm_id);
   ajaxHandler.queuedEchoAjax({ tsk_id: newId, tsk_name: newTask.tsk_name, itm_id: itemData.itm_id, action: "addTask" });
   setTimeout(() => itemRow._subTaskTable?.getRow(newId)?.getCell("tsk_name").edit(), 0);
-};
+}
 
 // ======= UPPDATERING =======
 const updateDataAndRefresh = (item, part = null) => {
@@ -344,36 +289,16 @@ const updateTaskCell = (cell) => {
   }
 };
 
-// Global variabel för att hålla koll på tagg-filter för Items
-let itemsTagFilter = null;
-
 // ======= FILTER & OPTIONS =======
 const applyPartFilter = () => {
   const selectedIds = (partTable?.getData() || []).filter(p => p.selected).map(p => p.prt_id);
 
-  // Kombinera part-filter och tagg-filter manuellt
   const combinedFilter = (data, filterParams) => {
     // Part-filter: kontrollera att item tillhör en vald part
     const partMatch = selectedIds.length === 0 || selectedIds.includes(data.itm_prt_id);
     if (!partMatch) return false;
-
-    // Tagg-filter: använd det sparade tagg-filtret om det finns
-    if (itemsTagFilter && itemsTagFilter.length > 0) {
-      const tags = Array.isArray(data.itm_tags) ? data.itm_tags : [];
-      if (tags.length === 0) return false;
-
-      // Använd samma logik som TagSystemUtils
-      const tagUtils = window.__tagUtils?.['item-table'];
-      const logic = tagUtils?.getFilterLogic() || 'AND';
-
-      if (logic === 'AND') {
-        return itemsTagFilter.every(selectedTag => tags.includes(selectedTag));
-      } else {
-        return itemsTagFilter.some(selectedTag => tags.includes(selectedTag));
-      }
-    }
-
-    return true; // Om inget tagg-filter är aktivt, visa alla som passar part-filtret
+    // Tagg-filter (sköts nu av TagSystemUtils automatiskt)
+    return true;
   };
 
   itemTable.setFilter(combinedFilter);
@@ -384,72 +309,54 @@ const updatePartOptions = () => {
   col?.updateDefinition({ editorParams: { values: partOptions }, formatter: cell => partLookup[cell.getValue()] || "Okänd part" });
 };
 
-function waitForTables(selectors, timeoutMs = 8000) {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const tick = () => {
-      const found = selectors.map(sel => (window.Tabulator && Tabulator.findTable(sel)[0]) || null);
-      if (found.every(Boolean)) return resolve(found);
-      if (Date.now() - start > timeoutMs) return reject(new Error("Tabeller hittades inte i tid"));
-      requestAnimationFrame(tick);
-    };
-    tick();
-  });
-}
-
-function ensureTagsArray(table, entityType) {
-  // Säkerställ att alla rader har tags-array
-  const data = table.getData();
-  let dataChanged = false;
-
-  const tagField = entityType === "part" ? "prt_tags" :
-                   entityType === "item" ? "itm_tags" :
-                   "tsk_tags";
-
-  data.forEach(row => {
-    if (!Array.isArray(row[tagField])) {
-      row[tagField] = [];
-      dataChanged = true;
-    }
-  });
-}
-
-// ======= LÄGG TILL TAGGAR-KOLUMNEN =======
-function addTagsToTable(table, entityType = "item") {
-  // Kontrollera om tabellen redan har taggar
-  const existingColumns = table.getColumns();
-  const tagField = entityType === "part" ? "prt_tags" : entityType === "item" ? "itm_tags" : "tsk_tags";
-  const hasTagColumn = existingColumns.some(col => col.getField() === tagField);
-  if (hasTagColumn) return;
-
-  const tagUtils = new TagSystemUtils();
-  tagUtils.init(table);
-
-  ensureTagsArray(table, entityType);
-
-  // Lägg kolumnen sist
-  table.addColumn(tagUtils.getColumnConfig(tagField)).catch(() => {
-    const current = table.getColumnDefinitions();
-    table.setColumns([...current, tagUtils.getColumnConfig(tagField)]);
+// ======= TABELLER =======
+const setupTables = () => {
+  partTable = new Tabulator("#part-table", {
+    index: "prt_id", data: project.prt_parts || [], layout: "fitDataFill", columns: getPartTableColumns(),
+    footerElement: uiHelpers.createFooterButton("Lägg till Part", addPartRow),
+    rowFormatter: (row) => partColors.applyPartColorToRow(row, row.getData().prt_id)
   });
 
-  window.__tagUtils = window.__tagUtils || {};
-  window.__tagUtils[table.element?.id || "table"] = tagUtils;
-}
+  itemTable = new Tabulator("#item-table", {
+    index: "itm_id", data: calcUtils.getAllItemsWithPartRef(project.prt_parts), layout: "fitDataFill",
+    columns: getItemTableColumns(), footerElement: uiHelpers.createFooterButton("Lägg till Item", addItemRow),
+    rowFormatter: (row) => {
+      const d = row.getData(), itm_id = d.itm_id, partId = d.itm_prt_id; partColors.applyPartColorToRow(row, partId);
+      let holderEl = row.getElement().querySelector(".subtable-holder");
+      if (!holderEl) {
+        holderEl = document.createElement("div"); holderEl.className = "subtable-holder";
+        holderEl.style.display = subtableToggle.openItemRows.has(itm_id) ? "block" : "none"; row.getElement().appendChild(holderEl);
+        if ((d.itm_tasks || []).length) {
+          const taskDiv = document.createElement("div"); holderEl.appendChild(taskDiv);
+          const taskTable = new Tabulator(taskDiv, {
+            index: "tsk_id", data: d.itm_tasks, layout: "fitDataFill", columns: getTaskTableColumns(),
+            footerElement: uiHelpers.createFooterButton("Lägg till Task", () => addTaskRow(d)),
+            rowFormatter: (taskRow) => partColors.applyPartColorToRow(taskRow, partId)
+          });
+          row._subTaskTable = taskTable;
+          taskTable.on("tableBuilt", () => {
+            TagSystemUtils.attachToTable(taskTable, project, "task", ajaxHandler);
+          });
+        } else holderEl.appendChild(uiHelpers.createFooterButton("Lägg till Task", () => addTaskRow(d)));
+      } else holderEl.style.display = subtableToggle.openItemRows.has(itm_id) ? "block" : "none";
+      subtableToggle.restoreToggleState(row);
+    },
+  });
 
-// Initiera när tabellerna finns
-waitForTables(["#part-table", "#item-table"])
-  .then(([partTable, itemTable]) => {
-    addTagsToTable(partTable, "part");
-    addTagsToTable(itemTable, "item");
-  })
-  .catch(err => console.warn("Tagg-init misslyckades:", err));
+  partTable.on("tableBuilt", () => {
+    TagSystemUtils.attachToTable(partTable, project, "part", ajaxHandler);
+  });
+  itemTable.on("tableBuilt", () => {
+    TagSystemUtils.attachToTable(itemTable, project, "item", ajaxHandler);
+  });
+
+  itemTable.on("tableBuilt", () => { applyPartFilter(); updatePartOptions(); });
+};
 
 // ======= UI INIT =======
 const initUI = () => {
   partColors.createColorStyles();
   setupTables();
-
   const handlers = {
     "redraw-items-btn": () => itemTable.redraw(true),
     "update-item-part-names-btn": () => { itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts)); updatePartOptions(); applyPartFilter(); itemTable.redraw(true); }
