@@ -112,11 +112,11 @@ class TagSystemUtils {
   /**
    * Hämtar alla unika taggar från data
    */
-  getAllUniqueTags(data) {
+  getAllUniqueTags(data, fieldName = 'tags') {
     const tags = new Set();
     data.forEach((row) => {
-      if (Array.isArray(row.tags)) {
-        row.tags.forEach((tag) => tags.add(tag));
+      if (Array.isArray(row[fieldName])) {
+        row[fieldName].forEach((tag) => tags.add(tag));
       }
     });
     return Array.from(tags).sort();
@@ -141,7 +141,10 @@ class TagSystemUtils {
    * Editor: lägga till/ta bort taggar med dropdown för befintliga taggar
    * Inkluderar AJAX-hantering för taggändringar
    */
-  tagEditor(cell, onRendered, success, cancel) {
+  tagEditor(cell, onRendered, success, cancel, editorParams) {
+    // Använd rätt fältnamn vid hämtning av taggar
+    const fieldName = cell.getColumn().getField() || 'tags';
+
     const container = document.createElement("div");
     container.className = "tag-editor-container";
 
@@ -190,43 +193,43 @@ class TagSystemUtils {
     // FIXAD - Säker hämtning av befintliga taggar
     const getAllExistingTags = () => {
       const allTags = new Set();
-      
+
       // Kontrollera att table finns och är initialiserad
       if (!this.table || typeof this.table.getData !== 'function') {
         console.warn('Tabulator-instansen är inte tillgänglig');
         return [];
       }
-      
+
       try {
         const tableData = this.table.getData();
         if (!Array.isArray(tableData)) {
           console.warn('Table data är inte en array');
           return [];
         }
-        
+
         tableData.forEach(row => {
-          if (Array.isArray(row.tags)) {
-            row.tags.forEach(tag => allTags.add(tag));
+          if (Array.isArray(row[fieldName])) {
+            row[fieldName].forEach(tag => allTags.add(tag));
           }
         });
       } catch (error) {
         console.error('Fel vid hämtning av tabelldata:', error);
         return [];
       }
-      
+
       return Array.from(allTags).sort();
     };
 
     // Uppdatera dropdown baserat på input
     const updateDropdown = (searchText = '') => {
       const existingTags = getAllExistingTags();
-      const filteredTags = existingTags.filter(tag => 
-        !currentTags.includes(tag) && 
+      const filteredTags = existingTags.filter(tag =>
+        !currentTags.includes(tag) &&
         tag.toLowerCase().includes(searchText.toLowerCase())
       );
 
       dropdown.innerHTML = '';
-      
+
       if (filteredTags.length === 0 || searchText === '') {
         dropdown.style.display = 'none';
         return;
@@ -242,15 +245,15 @@ class TagSystemUtils {
           transition: background-color 0.2s;
         `;
         option.textContent = tag;
-        
+
         option.addEventListener('mouseenter', () => {
           option.style.backgroundColor = '#f8f9fa';
         });
-        
+
         option.addEventListener('mouseleave', () => {
           option.style.backgroundColor = 'transparent';
         });
-        
+
         option.addEventListener('click', (e) => {
           e.stopPropagation();
           addTag(tag);
@@ -258,10 +261,10 @@ class TagSystemUtils {
           dropdown.style.display = 'none';
           input.focus();
         });
-        
+
         dropdown.appendChild(option);
       });
-      
+
       dropdown.style.display = 'block';
     };
 
@@ -286,26 +289,26 @@ class TagSystemUtils {
     // Hantera piltangenter för navigation
     input.addEventListener('keydown', (e) => {
       const options = dropdown.querySelectorAll('.tag-suggestion-option');
-      
+
       if (e.key === 'ArrowDown' && options.length > 0) {
         e.preventDefault();
         const activeOption = dropdown.querySelector('.active') || options[0];
         const currentIndex = Array.from(options).indexOf(activeOption);
         const nextIndex = Math.min(currentIndex + 1, options.length - 1);
-        
+
         options.forEach(opt => opt.classList.remove('active'));
         options[nextIndex].classList.add('active');
         options[nextIndex].style.backgroundColor = '#007bff';
         options[nextIndex].style.color = 'white';
       }
-      
+
       if (e.key === 'ArrowUp' && options.length > 0) {
         e.preventDefault();
         const activeOption = dropdown.querySelector('.active');
         if (activeOption) {
           const currentIndex = Array.from(options).indexOf(activeOption);
           const prevIndex = Math.max(currentIndex - 1, 0);
-          
+
           options.forEach(opt => {
             opt.classList.remove('active');
             opt.style.backgroundColor = 'transparent';
@@ -316,7 +319,7 @@ class TagSystemUtils {
           options[prevIndex].style.color = 'white';
         }
       }
-      
+
       if (e.key === 'Enter') {
         e.preventDefault();
         const activeOption = dropdown.querySelector('.active');
@@ -330,7 +333,7 @@ class TagSystemUtils {
           dropdown.style.display = 'none';
         }
       }
-      
+
       if (e.key === 'Escape') {
         dropdown.style.display = 'none';
         input.blur();
@@ -414,7 +417,7 @@ class TagSystemUtils {
                 }
               }, 10);
             }
-            
+
             // AJAX-anrop för taggändring (hanteras av den omslutande koden)
             console.log('Taggar ändrade:', {
               old: originalTags,
@@ -440,6 +443,8 @@ class TagSystemUtils {
    * Custom Tag HeaderFilter med AND/OR-logik
    */
   customTagHeaderFilter(headerValue, rowValue, rowData, filterParams) {
+    const fieldName = filterParams && filterParams.fieldName ? filterParams.fieldName : (this.table && this.table.getColumnDefinitions && this.table.getColumnDefinitions()[0]?.field) || 'tags';
+
     // Debug logging
     if (this.debugMode) {
       console.log('=== TAG SYSTEM FILTER CHECK ===');
@@ -454,15 +459,15 @@ class TagSystemUtils {
       if (this.debugMode) console.log('No filter active - showing row');
       return true;
     }
-    
+
     // Om raden inte har några taggar, dölj den
     if (!Array.isArray(rowValue) || rowValue.length === 0) {
       if (this.debugMode) console.log('Row has no tags - hiding row');
       return false;
     }
-    
+
     let result;
-    
+
     if (this.filterLogic === 'AND') {
       // AND-logik: ALLA valda taggar måste finnas i raden
       result = headerValue.every((selectedTag) => {
@@ -482,12 +487,12 @@ class TagSystemUtils {
         return hasTag;
       });
     }
-    
+
     if (this.debugMode) {
       console.log(`Final result (${this.filterLogic} logic - show row):`, result);
       console.log('===================');
     }
-    
+
     return result;
   }
 
@@ -495,6 +500,9 @@ class TagSystemUtils {
    * Custom Tag Header Filter Element
    */
   customTagHeaderFilterElement(cell, onRendered, success, cancel, editorParams) {
+    // Hämta fieldName från kolumnen
+    const fieldName = cell.getColumn().getField() || 'tags';
+
     const container = document.createElement("div");
     container.className = "custom-tag-header-filter";
 
@@ -536,15 +544,15 @@ class TagSystemUtils {
     let overlay = null;
     let selectedTags = [];
     let isOpen = false;
-    let allTags = this.getAllUniqueTags(this.table.getData());
+    let allTags = this.getAllUniqueTags(this.table.getData(), fieldName);
 
     // Funktion för att uppdatera toggle-knappen med konfigurerbar HTML
     const updateLogicToggleDisplay = () => {
       const config = this.toggleConfig[this.filterLogic];
-      
+
       logicToggle.innerHTML = config.html;
       logicToggle.title = config.title;
-      
+
       // Bestäm vilken stil som ska användas baserat på om filter är aktivt
       const isActive = selectedTags.length > 0;
       logicToggle.style.cssText = isActive ? config.activeStyle : config.inactiveStyle;
@@ -552,14 +560,14 @@ class TagSystemUtils {
 
     const updateDisplay = () => {
       selectedContainer.innerHTML = "";
-      
+
       if (selectedTags.length === 0) {
         const placeholder = document.createElement("span");
         placeholder.className = "tag-filter-placeholder";
         placeholder.textContent = "Filtrera taggar...";
         selectedContainer.appendChild(placeholder);
         clearButton.style.display = "none";
-        
+
         // Visa toggle-knappen alltid
         logicToggle.style.display = "block";
       } else {
@@ -570,22 +578,23 @@ class TagSystemUtils {
           selectedContainer.appendChild(tagBadge);
         });
         clearButton.style.display = "block";
-        
+
         // Visa toggle-knappen med full opacitet när aktiv
         logicToggle.style.display = "block";
       }
-      
+
       // Uppdatera toggle-knappens utseende
       updateLogicToggleDisplay();
     };
 
     const updateDropdown = () => {
+      allTags = this.getAllUniqueTags(this.table.getData(), fieldName);
       dropdown.innerHTML = "";
       allTags.forEach(tag => {
         const option = document.createElement("div");
         option.className = "tag-filter-option";
         option.textContent = tag;
-        
+
         if (selectedTags.includes(tag)) {
           option.classList.add("selected");
         }
@@ -606,17 +615,17 @@ class TagSystemUtils {
       } else {
         selectedTags.push(tag);
       }
-      
+
       // Uppdatera currentFilter för debug
       this.currentFilter = [...selectedTags];
-      
+
       updateDisplay();
       updateDropdown();
-      
+
       // Skicka filter till Tabulator - viktigt att skicka array eller null
       const filterValue = selectedTags.length > 0 ? [...selectedTags] : null;
       success(filterValue);
-      
+
       // Uppdatera debug info
       this.updateDebugInfo(selectedTags);
     };
@@ -639,7 +648,7 @@ class TagSystemUtils {
 
       isOpen = true;
       arrow.classList.add("open");
-      allTags = this.getAllUniqueTags(this.table.getData());
+      allTags = this.getAllUniqueTags(this.table.getData(), fieldName);
 
       // Overlay-metod
       overlay = document.createElement("div");
@@ -647,7 +656,7 @@ class TagSystemUtils {
       document.body.appendChild(overlay);
 
       document.body.appendChild(dropdown);
-      
+
       const rect = button.getBoundingClientRect();
       dropdown.style.position = 'fixed';
       dropdown.style.top = (rect.bottom + 2) + 'px';
@@ -655,7 +664,7 @@ class TagSystemUtils {
       dropdown.style.width = rect.width + 'px';
       dropdown.style.display = 'block';
       dropdown.style.zIndex = '99999';
-      
+
       updateDropdown();
 
       // Stäng dropdown när man klickar på overlay
@@ -733,7 +742,7 @@ class TagSystemUtils {
     if (debugInfo) {
       debugInfo.style.display = this.debugMode ? 'block' : 'none';
     }
-    
+
     if (this.debugMode) {
       this.updateDebugInfo(this.currentFilter);
     }
@@ -786,6 +795,7 @@ class TagSystemUtils {
       editor: this.tagEditor.bind(this),
       headerFilter: this.customTagHeaderFilterElement.bind(this),
       headerFilterFunc: this.customTagHeaderFilter.bind(this),
+      headerFilterParams: { fieldName }, // <-- så vi alltid får rätt fält
       headerFilterEmptyCheck: function (value) {
         return !value || !Array.isArray(value) || value.length === 0;
       }
