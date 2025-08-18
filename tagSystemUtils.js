@@ -1,6 +1,6 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Robust, kapslad, felhanterad och Tabulator-kompatibel overlay-hantering!
+ * Overlayen tas bort manuellt vid spara/avbryt!
  */
 class TagSystemUtils {
   static #initializedTables = new WeakSet();
@@ -254,7 +254,6 @@ class TagSystemUtils {
       if (e.key === "Enter") addButton.click();
     });
 
-    // --- Save enligt Tabulator best practice ---
     saveButton.addEventListener("click", () => {
       try {
         const newTags = [...currentTags];
@@ -268,10 +267,11 @@ class TagSystemUtils {
 
         document.removeEventListener("keydown", handleEscape);
 
-        // Kalla endast success, låt Tabulator städa overlay/editor!
         success(newTags);
 
-        // All eventuell redraw/refreshFilter hanteras i cellEdited-listener på tabellen!
+        // Ta bort overlay ur DOM (eftersom Tabulator inte gör det)
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
       } catch (err) {
         if (window?.console) console.error("Overlay save error:", err);
         alert("Ett fel uppstod när taggar skulle sparas. Se konsollen för detaljer.");
@@ -281,17 +281,20 @@ class TagSystemUtils {
     cancelButton.addEventListener("click", () => {
       document.removeEventListener("keydown", handleEscape);
       cancel();
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     });
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         document.removeEventListener("keydown", handleEscape);
         cancel();
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
     });
     const handleEscape = (e) => {
       if (e.key === "Escape") {
         document.removeEventListener("keydown", handleEscape);
         cancel();
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
     };
     document.addEventListener("keydown", handleEscape);
