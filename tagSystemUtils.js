@@ -1,6 +1,6 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
- * Robust, kapslad, och nu skyddad mot dubletter, tomma taggar, race och mer!
+ * Robust, kapslad, och nu skyddad mot dubletter, tomma taggar, race och overlay-stängningsproblem.
  */
 class TagSystemUtils {
   // WeakSet för att undvika dubletter per Tabulator-instans
@@ -224,8 +224,9 @@ class TagSystemUtils {
       updateExistingTagsDisplay();
     };
     const updateExistingTagsDisplay = () => {
+      const allTags = this.getAllTags();
       existingTagsContainer.innerHTML = "";
-      const availableTags = this.getAllTags().filter(tag => !currentTags.includes(tag));
+      const availableTags = allTags.filter(tag => !currentTags.includes(tag));
       if (!availableTags.length) {
         const empty = document.createElement("span");
         empty.className = "empty-state";
@@ -269,6 +270,8 @@ class TagSystemUtils {
     input.addEventListener("keypress", e => {
       if (e.key === "Enter") addButton.click();
     });
+
+    // --- FIX: Stäng overlay FÖRE update ---
     saveButton.addEventListener("click", () => {
       const newTags = [...currentTags];
       let entityObj = this.findEntityById(entityId);
@@ -278,31 +281,36 @@ class TagSystemUtils {
       this.invalidateTagsCache(); // Töm cache vid ändring!
       const oldTags = Array.isArray(rowData[this.tagField]) ? [...rowData[this.tagField]] : [];
       this.handleTagUpdate(entityId, newTags, oldTags);
+
+      // ----- STÄNG OVERLAY FÖRST -----
+      document.removeEventListener("keydown", handleEscape);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+      // ----- SEN UPPDATERA RAD OCH TABELL -----
       cell.getRow().update({ ...cell.getRow().getData(), [this.tagField]: [...newTags] });
-      // Säkerställ redraw och filter fungerar även direkt efter tillägg
       this.table.redraw(true);
       if (typeof this.table.refreshFilter === "function") this.table.refreshFilter();
+
       success(newTags);
-      document.body.removeChild(overlay);
-      document.removeEventListener("keydown", handleEscape);
     });
+
     cancelButton.addEventListener("click", () => {
-      cancel();
-      document.body.removeChild(overlay);
       document.removeEventListener("keydown", handleEscape);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      cancel();
     });
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
-        cancel();
-        document.body.removeChild(overlay);
         document.removeEventListener("keydown", handleEscape);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        cancel();
       }
     });
     const handleEscape = (e) => {
       if (e.key === "Escape") {
-        cancel();
-        document.body.removeChild(overlay);
         document.removeEventListener("keydown", handleEscape);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        cancel();
       }
     };
     document.addEventListener("keydown", handleEscape);
