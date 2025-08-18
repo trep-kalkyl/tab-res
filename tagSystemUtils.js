@@ -1,6 +1,7 @@
 /**
  * TagSystemUtils - Avancerat tag-filtreringssystem för Tabulator
  * Robust, kapslad, och nu skyddad mot dubletter, tomma taggar, race och overlay-stängningsproblem.
+ * Extra: smartare felhantering vid Tabulator-update/redraw.
  */
 class TagSystemUtils {
   static #initializedTables = new WeakSet();
@@ -272,13 +273,21 @@ class TagSystemUtils {
 
         try {
           const rowObj = cell.getRow();
-          if (rowObj) {
+          if (rowObj && rowObj._row && !rowObj._row.deleted) {
             rowObj.update({ ...rowObj.getData(), [this.tagField]: [...newTags] });
           }
           if (this.table && typeof this.table.redraw === "function") this.table.redraw(true);
           if (this.table && typeof this.table.refreshFilter === "function") this.table.refreshFilter();
         } catch (err) {
-          if (window?.console) console.error("Tabulator update/redraw error:", err);
+          if (err && err.message && err.message.match(/row.*not found|No row with/gi)) {
+            if (window?.console) console.warn("Tabulator: raden saknas vid update/redraw.", err && err.message ? err.message : err);
+          } else if (window?.console) {
+            if (err && err.stack) {
+              console.error("Tabulator update/redraw error:", err, err.stack);
+            } else {
+              console.error("Tabulator update/redraw error:", err && err.message ? err.message : err);
+            }
+          }
         }
 
         try {
