@@ -111,8 +111,7 @@ class TagSystemUtils {
       formatter: cell => this.tagFormatter(cell),
       editor: (cell, onRendered, success, cancel) =>
         this.tagEditor(cell, onRendered, success, cancel),
-      headerFilter: true,
-      headerFilterElement: (cell, onRendered, success, cancel, editorParams) =>
+      headerFilter: (cell, onRendered, success, cancel, editorParams) =>
         this.headerFilterElement(cell, onRendered, success, cancel, editorParams),
       headerFilterFunc: (headerValue, rowValue, rowData, filterParams) =>
         this.headerFilterFunc(headerValue, rowValue, rowData, filterParams),
