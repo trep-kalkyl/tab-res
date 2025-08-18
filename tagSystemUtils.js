@@ -3,13 +3,11 @@
  * Robust, kapslad, och nu skyddad mot dubletter, tomma taggar, race och overlay-stängningsproblem.
  */
 class TagSystemUtils {
-  // WeakSet för att undvika dubletter per Tabulator-instans
   static #initializedTables = new WeakSet();
 
   static attachToTable(table, project, entityType = "item", ajaxHandler) {
     const tagField = entityType === "part" ? "prt_tags" : entityType === "item" ? "itm_tags" : "tsk_tags";
     if (!table || TagSystemUtils.#initializedTables.has(table)) return;
-    // Kontroll: om kolumnen redan finns, markera som initierad och avbryt
     if (table.getColumns().some(col => col.getField() === tagField)) {
       TagSystemUtils.#initializedTables.add(table);
       return;
@@ -17,7 +15,6 @@ class TagSystemUtils {
     const tagsUtil = new TagSystemUtils(table, project, entityType, tagField, ajaxHandler);
     table.addColumn(tagsUtil.getColumnConfig());
     TagSystemUtils.#initializedTables.add(table);
-    // Spara för ev. extern åtkomst/debug
     window.__tagUtils = window.__tagUtils || {};
     window.__tagUtils[table.element?.id || "table"] = tagsUtil;
   }
@@ -28,15 +25,13 @@ class TagSystemUtils {
     this.entityType = entityType;
     this.tagField = tagField;
     this.ajaxHandler = ajaxHandler;
-    this.filterLogic = "AND"; // default
+    this.filterLogic = "AND";
     this.currentFilter = [];
     this.__lastTagsCache = null;
     this.__lastDataHash = null;
   }
 
-  // ======= DATA AKTIVITETER =======
   #dataHash() {
-    // Enkel hash för att detektera om data ändrats
     try {
       return JSON.stringify(this.project);
     } catch {
@@ -50,7 +45,6 @@ class TagSystemUtils {
   }
 
   getAllTags() {
-    // Prestanda: cachea tills project's data ändrats
     const hash = this.#dataHash();
     if (this.__lastDataHash === hash && this.__lastTagsCache) return this.__lastTagsCache;
 
@@ -91,7 +85,6 @@ class TagSystemUtils {
     return null;
   }
 
-  // ======= AJAX =======
   handleTagUpdate(entityId, newTags, oldTags = []) {
     if (!this.ajaxHandler) {
       if (window?.console) console.warn("Ingen AJAX-handler kopplad för tagguppdatering.");
@@ -111,7 +104,6 @@ class TagSystemUtils {
     }
   }
 
-  // ======= KOLUMNKONFIG =======
   getColumnConfig() {
     return {
       title: "Taggar",
@@ -137,11 +129,9 @@ class TagSystemUtils {
     );
   }
 
-  // ======= TAGG-EDITOR (Overlay) =======
   tagEditor(cell, onRendered, success, cancel) {
-    // Deep copy: undvik race mellan editor och annan logik
     let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()].map(t => "" + t) : [];
-    const rowData = { ...cell.getRow().getData() }; // shallow copy
+    const rowData = { ...cell.getRow().getData() };
     const entityId = rowData[this.entityType === "part" ? "prt_id" : this.entityType === "item" ? "itm_id" : "tsk_id"];
     const overlay = document.createElement("div");
     overlay.className = "tag-editor-overlay";
@@ -154,7 +144,6 @@ class TagSystemUtils {
     title.textContent = "Redigera taggar";
     editorBox.appendChild(title);
 
-    // Valda taggar
     const selectedTagsSection = document.createElement("div");
     selectedTagsSection.className = "tag-section";
     selectedTagsSection.innerHTML = "<label>Valda taggar:</label>";
@@ -163,7 +152,6 @@ class TagSystemUtils {
     selectedTagsSection.appendChild(tagContainer);
     editorBox.appendChild(selectedTagsSection);
 
-    // Tillgängliga taggar
     const existingTagsSection = document.createElement("div");
     existingTagsSection.className = "tag-section";
     existingTagsSection.innerHTML = "<label>Tillgängliga taggar (klicka för att lägga till):</label>";
@@ -172,7 +160,6 @@ class TagSystemUtils {
     existingTagsSection.appendChild(existingTagsContainer);
     editorBox.appendChild(existingTagsSection);
 
-    // Ny tagg
     const newTagSection = document.createElement("div");
     newTagSection.className = "tag-section";
     newTagSection.innerHTML = "<label>Lägg till ny tagg:</label>";
@@ -187,7 +174,6 @@ class TagSystemUtils {
     newTagSection.appendChild(addButton);
     editorBox.appendChild(newTagSection);
 
-    // Spara/Avbryt
     const buttonContainer = document.createElement("div");
     buttonContainer.className = "button-container";
     const saveButton = document.createElement("button");
@@ -200,7 +186,6 @@ class TagSystemUtils {
     buttonContainer.appendChild(cancelButton);
     editorBox.appendChild(buttonContainer);
 
-    // Helper-funktioner
     const updateTagDisplay = () => {
       tagContainer.innerHTML = "";
       if (!currentTags.length) {
@@ -247,16 +232,14 @@ class TagSystemUtils {
       }
     };
 
-    // Validering: returnerar true om taggen är OK
     function isValidTag(tag) {
       if (!tag) return false;
       if (typeof tag !== "string") tag = String(tag);
       if (!tag.trim()) return false;
-      if (currentTags.includes(tag.trim())) return false; // dubblett
+      if (currentTags.includes(tag.trim())) return false;
       return true;
     }
 
-    // Event listeners
     addButton.addEventListener("click", () => {
       let newTag = input.value.trim();
       if (isValidTag(newTag)) {
@@ -271,45 +254,64 @@ class TagSystemUtils {
       if (e.key === "Enter") addButton.click();
     });
 
-    // --- FIX: Stäng overlay FÖRE update ---
     saveButton.addEventListener("click", () => {
-      const newTags = [...currentTags];
-      let entityObj = this.findEntityById(entityId);
-      if (entityObj) {
-        entityObj[this.tagField] = [...newTags];
+      try {
+        const newTags = [...currentTags];
+        let entityObj = this.findEntityById(entityId);
+        if (entityObj) {
+          entityObj[this.tagField] = [...newTags];
+        }
+        this.invalidateTagsCache();
+        const oldTags = Array.isArray(rowData[this.tagField]) ? [...rowData[this.tagField]] : [];
+        this.handleTagUpdate(entityId, newTags, oldTags);
+
+        document.removeEventListener("keydown", handleEscape);
+        try {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        } catch (err) {}
+
+        try {
+          const rowObj = cell.getRow();
+          if (rowObj) {
+            rowObj.update({ ...rowObj.getData(), [this.tagField]: [...newTags] });
+          }
+          if (this.table && typeof this.table.redraw === "function") this.table.redraw(true);
+          if (this.table && typeof this.table.refreshFilter === "function") this.table.refreshFilter();
+        } catch (err) {
+          if (window?.console) console.error("Tabulator update/redraw error:", err);
+        }
+
+        try {
+          success(newTags);
+        } catch (err) {}
+      } catch (err) {
+        if (window?.console) console.error("Overlay save error:", err);
+        alert("Ett fel uppstod när taggar skulle sparas. Se konsollen för detaljer.");
       }
-      this.invalidateTagsCache(); // Töm cache vid ändring!
-      const oldTags = Array.isArray(rowData[this.tagField]) ? [...rowData[this.tagField]] : [];
-      this.handleTagUpdate(entityId, newTags, oldTags);
-
-      // ----- STÄNG OVERLAY FÖRST -----
-      document.removeEventListener("keydown", handleEscape);
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-
-      // ----- SEN UPPDATERA RAD OCH TABELL -----
-      cell.getRow().update({ ...cell.getRow().getData(), [this.tagField]: [...newTags] });
-      this.table.redraw(true);
-      if (typeof this.table.refreshFilter === "function") this.table.refreshFilter();
-
-      success(newTags);
     });
 
     cancelButton.addEventListener("click", () => {
       document.removeEventListener("keydown", handleEscape);
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      try {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      } catch (err) {}
       cancel();
     });
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         document.removeEventListener("keydown", handleEscape);
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        try {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        } catch (err) {}
         cancel();
       }
     });
     const handleEscape = (e) => {
       if (e.key === "Escape") {
         document.removeEventListener("keydown", handleEscape);
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        try {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        } catch (err) {}
         cancel();
       }
     };
@@ -323,7 +325,6 @@ class TagSystemUtils {
     return document.createElement("div");
   }
 
-  // ======= FILTER =======
   headerFilterElement(cell, onRendered, success, cancel, editorParams) {
     const container = document.createElement("div");
     container.className = "custom-tag-header-filter";
@@ -346,7 +347,6 @@ class TagSystemUtils {
     clearButton.title = "Rensa filter";
     button.appendChild(clearButton);
 
-    // Dropdown
     const dropdown = document.createElement("div");
     dropdown.className = "tag-filter-dropdown-fixed";
     dropdown.style.display = "none";
@@ -424,7 +424,6 @@ class TagSystemUtils {
       toggleDropdown();
     });
 
-    // Init value
     const initialValue = cell.getValue();
     if (initialValue && Array.isArray(initialValue)) selectedTags = [...initialValue];
 
