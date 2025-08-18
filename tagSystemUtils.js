@@ -115,7 +115,13 @@ class TagSystemUtils {
         this.headerFilterElement(cell, onRendered, success, cancel, editorParams),
       headerFilterFunc: (headerValue, rowValue, rowData, filterParams) =>
         this.headerFilterFunc(headerValue, rowValue, rowData, filterParams),
-      headerFilterEmptyCheck: value => !value || !Array.isArray(value) || value.length === 0
+      headerFilterEmptyCheck: value => !value || !Array.isArray(value) || value.length === 0,
+      cellEdited: (cell) => {
+        // Uppdatera tabellen efter tagg-ändring
+        setTimeout(() => {
+          this.table.redraw();
+        }, 50);
+      }
     };
   }
 
@@ -308,6 +314,11 @@ class TagSystemUtils {
         // Ta bort overlay ur DOM (eftersom Tabulator inte gör det)
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
 
+        // Tvinga en uppdatering av tabellen
+        setTimeout(() => {
+          this.table.redraw();
+        }, 100);
+
       } catch (err) {
         if (window?.console) console.error("Overlay save error:", err);
         alert("Ett fel uppstod när taggar skulle sparas. Se konsollen för detaljer.");
@@ -409,7 +420,7 @@ class TagSystemUtils {
       top: 100%;
       left: 0;
       right: 0;
-      z-index: 1000;
+      z-index: 10000;
       background: white;
       border: 1px solid #ddd;
       border-top: none;
@@ -417,6 +428,7 @@ class TagSystemUtils {
       max-height: 200px;
       overflow-y: auto;
       display: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     `;
     container.appendChild(dropdown);
 
