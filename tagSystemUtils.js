@@ -440,6 +440,7 @@ class TagSystemUtils {
    * Custom Tag HeaderFilter med AND/OR-logik
    */
   customTagHeaderFilter(headerValue, rowValue, rowData, filterParams) {
+    // Debug logging
     if (this.debugMode) {
       console.log('=== TAG SYSTEM FILTER CHECK ===');
       console.log('Row:', rowData.namn || rowData.itm_name || rowData.prt_name || rowData.tsk_name);
@@ -448,11 +449,13 @@ class TagSystemUtils {
       console.log('Filter logic:', this.filterLogic);
     }
 
+    // Om inget filter är satt, visa alla rader
     if (!headerValue || !Array.isArray(headerValue) || headerValue.length === 0) {
       if (this.debugMode) console.log('No filter active - showing row');
       return true;
     }
     
+    // Om raden inte har några taggar, dölj den
     if (!Array.isArray(rowValue) || rowValue.length === 0) {
       if (this.debugMode) console.log('Row has no tags - hiding row');
       return false;
@@ -461,9 +464,23 @@ class TagSystemUtils {
     let result;
     
     if (this.filterLogic === 'AND') {
-      result = headerValue.every((selectedTag) => rowValue.includes(selectedTag));
+      // AND-logik: ALLA valda taggar måste finnas i raden
+      result = headerValue.every((selectedTag) => {
+        const hasTag = rowValue.includes(selectedTag);
+        if (this.debugMode) {
+          console.log(`  AND - Checking if row has tag "${selectedTag}":`, hasTag);
+        }
+        return hasTag;
+      });
     } else {
-      result = headerValue.some((selectedTag) => rowValue.includes(selectedTag));
+      // OR-logik: MINST EN vald tagg måste finnas i raden
+      result = headerValue.some((selectedTag) => {
+        const hasTag = rowValue.includes(selectedTag);
+        if (this.debugMode) {
+          console.log(`  OR - Checking if row has tag "${selectedTag}":`, hasTag);
+        }
+        return hasTag;
+      });
     }
     
     if (this.debugMode) {
@@ -476,7 +493,6 @@ class TagSystemUtils {
 
   /**
    * Custom Tag Header Filter Element
-   * FIX: Gör contains-check på logicToggle istället för === så AND/OR-knappen funkar oavsett var på knappen man klickar
    */
   customTagHeaderFilterElement(cell, onRendered, success, cancel, editorParams) {
     const container = document.createElement("div");
@@ -528,18 +544,23 @@ class TagSystemUtils {
       
       logicToggle.innerHTML = config.html;
       logicToggle.title = config.title;
+      
+      // Bestäm vilken stil som ska användas baserat på om filter är aktivt
       const isActive = selectedTags.length > 0;
       logicToggle.style.cssText = isActive ? config.activeStyle : config.inactiveStyle;
     };
 
     const updateDisplay = () => {
       selectedContainer.innerHTML = "";
+      
       if (selectedTags.length === 0) {
         const placeholder = document.createElement("span");
         placeholder.className = "tag-filter-placeholder";
         placeholder.textContent = "Filtrera taggar...";
         selectedContainer.appendChild(placeholder);
         clearButton.style.display = "none";
+        
+        // Visa toggle-knappen alltid
         logicToggle.style.display = "block";
       } else {
         selectedTags.forEach(tag => {
@@ -549,8 +570,12 @@ class TagSystemUtils {
           selectedContainer.appendChild(tagBadge);
         });
         clearButton.style.display = "block";
+        
+        // Visa toggle-knappen med full opacitet när aktiv
         logicToggle.style.display = "block";
       }
+      
+      // Uppdatera toggle-knappens utseende
       updateLogicToggleDisplay();
     };
 
@@ -560,13 +585,16 @@ class TagSystemUtils {
         const option = document.createElement("div");
         option.className = "tag-filter-option";
         option.textContent = tag;
+        
         if (selectedTags.includes(tag)) {
           option.classList.add("selected");
         }
+
         option.addEventListener("click", (e) => {
           e.stopPropagation();
           toggleTag(tag);
         });
+
         dropdown.appendChild(option);
       });
     };
@@ -578,11 +606,18 @@ class TagSystemUtils {
       } else {
         selectedTags.push(tag);
       }
+      
+      // Uppdatera currentFilter för debug
       this.currentFilter = [...selectedTags];
+      
       updateDisplay();
       updateDropdown();
+      
+      // Skicka filter till Tabulator - viktigt att skicka array eller null
       const filterValue = selectedTags.length > 0 ? [...selectedTags] : null;
       success(filterValue);
+      
+      // Uppdatera debug info
       this.updateDebugInfo(selectedTags);
     };
 
@@ -601,13 +636,18 @@ class TagSystemUtils {
         closeDropdown();
         return;
       }
+
       isOpen = true;
       arrow.classList.add("open");
       allTags = this.getAllUniqueTags(this.table.getData());
+
+      // Overlay-metod
       overlay = document.createElement("div");
       overlay.className = "dropdown-overlay";
       document.body.appendChild(overlay);
+
       document.body.appendChild(dropdown);
+      
       const rect = button.getBoundingClientRect();
       dropdown.style.position = 'fixed';
       dropdown.style.top = (rect.bottom + 2) + 'px';
@@ -615,23 +655,31 @@ class TagSystemUtils {
       dropdown.style.width = rect.width + 'px';
       dropdown.style.display = 'block';
       dropdown.style.zIndex = '99999';
+      
       updateDropdown();
+
+      // Stäng dropdown när man klickar på overlay
       overlay.addEventListener("click", closeDropdown);
     };
 
-    // ----------- FIX: contains istället för === här! ------------
     button.addEventListener("click", (e) => {
       // Hantera logic toggle
-      if (logicToggle.contains(e.target)) {
+      if (e.target === logicToggle) {
         e.stopPropagation();
         this.filterLogic = this.filterLogic === 'AND' ? 'OR' : 'AND';
         updateDisplay();
-        if (selectedTags.length > 0) this.table.refreshFilter();
+        
+        // Tvinga om-filtrering
+        if (selectedTags.length > 0) {
+          this.table.refreshFilter();
+        }
+        
         this.updateDebugInfo(selectedTags);
         return;
       }
+      
       // Hantera clear button
-      if (clearButton.contains(e.target)) {
+      if (e.target === clearButton) {
         e.stopPropagation();
         selectedTags = [];
         this.currentFilter = [];
@@ -640,6 +688,7 @@ class TagSystemUtils {
         this.updateDebugInfo(selectedTags);
         return;
       }
+      
       // Öppna dropdown
       toggleDropdown();
     });
@@ -660,6 +709,7 @@ class TagSystemUtils {
       }
     });
 
+    // Set initial value if provided
     const initialValue = cell.getValue();
     if (initialValue && Array.isArray(initialValue)) {
       selectedTags = [...initialValue];
@@ -691,6 +741,7 @@ class TagSystemUtils {
     if (debugInfo) {
       debugInfo.style.display = this.debugMode ? 'block' : 'none';
     }
+    
     if (this.debugMode) {
       this.updateDebugInfo(this.currentFilter);
     }
