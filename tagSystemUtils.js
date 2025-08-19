@@ -299,6 +299,356 @@ class TagSystemUtils {
       }
     };
   }
+
+  // ======= FLYTTADE FUNKTIONER FRÅN MAIN.JS =======
+
+  /**
+   * Säkerställ att alla rader har tags-array
+   */
+  ensureTagsArray(table, entityType) {
+    const data = table.getData();
+    let dataChanged = false;
+    
+    const tagField = entityType === "part" ? "prt_tags" : 
+                     entityType === "item" ? "itm_tags" : 
+                     "tsk_tags";
+    
+    data.forEach(row => {
+      if (!Array.isArray(row[tagField])) {
+        row[tagField] = [];
+        dataChanged = true;
+      }
+    });
+  }
+
+  /**
+   * Hämta befintliga taggar för parts
+   */
+  getExistingPartTags(project) {
+    const partTags = new Set();
+    
+    project.prt_parts?.forEach(part => {
+      if (Array.isArray(part.prt_tags)) {
+        part.prt_tags.forEach(tag => partTags.add(tag));
+      }
+    });
+    
+    return Array.from(partTags).sort();
+  }
+
+  /**
+   * Hämta befintliga taggar för items
+   */
+  getExistingItemTags(project) {
+    const itemTags = new Set();
+    
+    project.prt_parts?.forEach(part => {
+      part.prt_items?.forEach(item => {
+        if (Array.isArray(item.itm_tags)) {
+          item.itm_tags.forEach(tag => itemTags.add(tag));
+        }
+      });
+    });
+    
+    return Array.from(itemTags).sort();
+  }
+
+  /**
+   * Hämta befintliga taggar för tasks
+   */
+  getExistingTaskTags(project) {
+    const taskTags = new Set();
+    
+    project.prt_parts?.forEach(part => {
+      part.prt_items?.forEach(item => {
+        item.itm_tasks?.forEach(task => {
+          if (Array.isArray(task.tsk_tags)) {
+            task.tsk_tags.forEach(tag => taskTags.add(tag));
+          }
+        });
+      });
+    });
+    
+    return Array.from(taskTags).sort();
+  }
+
+  /**
+   * Hjälpfunktion för att få rätt tagg-funktion baserat på entitetstyp
+   */
+  getExistingTagsForEntityType(entityType, project) {
+    switch(entityType) {
+      case 'part': return this.getExistingPartTags(project);
+      case 'item': return this.getExistingItemTags(project);
+      case 'task': return this.getExistingTaskTags(project);
+      default: return [];
+    }
+  }
+
+  /**
+   * Förbättrad tagg-editor (flyttad från main.js)
+   */
+  createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
+    // Skapa overlay
+    const overlay = document.createElement("div");
+    overlay.className = "tag-editor-overlay";
+    
+    // Skapa editor-box
+    const editorBox = document.createElement("div");
+    editorBox.className = "tag-editor-box";
+    
+    // Titel
+    const title = document.createElement("h5");
+    title.className = "tag-editor-title";
+    title.textContent = "Redigera taggar";
+    editorBox.appendChild(title);
+    
+    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
+    // Använd rätt funktion baserat på entitetstyp
+    const existingTags = this.getExistingTagsForEntityType(entityType, project);
+    
+    // Sektion för valda taggar
+    const selectedTagsSection = document.createElement("div");
+    selectedTagsSection.className = "tag-section";
+    
+    const selectedLabel = document.createElement("label");
+    selectedLabel.className = "tag-section-label";
+    selectedLabel.textContent = "Valda taggar:";
+    selectedTagsSection.appendChild(selectedLabel);
+    
+    const tagContainer = document.createElement("div");
+    tagContainer.className = "tag-container";
+    selectedTagsSection.appendChild(tagContainer);
+    
+    editorBox.appendChild(selectedTagsSection);
+    
+    // Sektion för befintliga taggar
+    const existingTagsSection = document.createElement("div");
+    existingTagsSection.className = "tag-section";
+    
+    const existingLabel = document.createElement("label");
+    existingLabel.className = "tag-section-label";
+    existingLabel.textContent = "Tillgängliga taggar (klicka för att lägga till):";
+    existingTagsSection.appendChild(existingLabel);
+    
+    const existingTagsContainer = document.createElement("div");
+    existingTagsContainer.className = "existing-tags-container";
+    existingTagsSection.appendChild(existingTagsContainer);
+    
+    editorBox.appendChild(existingTagsSection);
+    
+    // Sektion för nya taggar
+    const newTagSection = document.createElement("div");
+    newTagSection.className = "tag-section";
+    
+    const newLabel = document.createElement("label");
+    newLabel.className = "tag-section-label";
+    newLabel.textContent = "Lägg till ny tagg:";
+    newTagSection.appendChild(newLabel);
+    
+    const inputContainer = document.createElement("div");
+    inputContainer.className = "input-container";
+    
+    const input = document.createElement("input");
+    input.className = "tag-input";
+    input.type = "text";
+    input.placeholder = "Skriv ny tagg...";
+    inputContainer.appendChild(input);
+    
+    const addButton = document.createElement("button");
+    addButton.className = "btn btn-primary";
+    addButton.textContent = "Lägg till";
+    inputContainer.appendChild(addButton);
+    
+    newTagSection.appendChild(inputContainer);
+    editorBox.appendChild(newTagSection);
+    
+    // Knappar
+    const buttonContainer = document.createElement("div");
+    buttonContainer.className = "button-container";
+    
+    const saveButton = document.createElement("button");
+    saveButton.className = "btn btn-success";
+    saveButton.textContent = "Spara";
+    buttonContainer.appendChild(saveButton);
+    
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "btn btn-secondary";
+    cancelButton.textContent = "Avbryt";
+    buttonContainer.appendChild(cancelButton);
+    
+    editorBox.appendChild(buttonContainer);
+    
+    // Funktion för att uppdatera visning av valda taggar
+    const updateTagDisplay = () => {
+      tagContainer.innerHTML = "";
+      if (currentTags.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Inga taggar tillagda";
+        tagContainer.appendChild(emptySpan);
+      } else {
+        currentTags.forEach((tag) => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item selected";
+          tagEl.title = "Klicka för att ta bort";
+          
+          const tagText = document.createElement("span");
+          tagText.textContent = tag;
+          tagEl.appendChild(tagText);
+          
+          const removeBtn = document.createElement("span");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "×";
+          tagEl.appendChild(removeBtn);
+          
+          tagEl.addEventListener("click", () => removeTag(tag));
+          tagContainer.appendChild(tagEl);
+        });
+      }
+      updateExistingTagsDisplay();
+    };
+    
+    // Funktion för att uppdatera visning av tillgängliga taggar
+    const updateExistingTagsDisplay = () => {
+      existingTagsContainer.innerHTML = "";
+      const availableNow = existingTags.filter(tag => !currentTags.includes(tag));
+      
+      if (availableNow.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Alla tillgängliga taggar är redan tillagda";
+        existingTagsContainer.appendChild(emptySpan);
+      } else {
+        availableNow.forEach(tag => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item available";
+          tagEl.textContent = tag;
+          tagEl.title = "Klicka för att lägga till";
+          tagEl.addEventListener("click", () => addTag(tag));
+          existingTagsContainer.appendChild(tagEl);
+        });
+      }
+    };
+    
+    // Funktion för att lägga till tagg
+    const addTag = (tag) => {
+      if (tag && !currentTags.includes(tag)) {
+        currentTags.push(tag);
+        updateTagDisplay();
+      }
+    };
+    
+    // Funktion för att ta bort tagg
+    const removeTag = (tag) => {
+      const index = currentTags.indexOf(tag);
+      if (index > -1) {
+        currentTags.splice(index, 1);
+        updateTagDisplay();
+      }
+    };
+    
+    // Event listeners
+    addButton.addEventListener("click", () => {
+      const newTag = input.value.trim();
+      if (newTag) {
+        addTag(newTag);
+        input.value = "";
+        input.focus();
+      }
+    });
+    
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        const newTag = input.value.trim();
+        if (newTag) {
+          addTag(newTag);
+          input.value = "";
+        }
+      }
+    });
+    
+    saveButton.addEventListener("click", () => {
+      success(currentTags);
+      const rowData = cell.getRow().getData();
+      const oldTags = Array.isArray(rowData[tagField]) ? [...rowData[tagField]] : [];
+      rowData[tagField] = currentTags;
+      cell.getRow().update(rowData);
+      
+      // AJAX-hantering för att uppdatera backend
+      if (handleTagUpdate && findPartById && findItemById && findTaskById) {
+        let entityId, entityTypeStr;
+        
+        if (entityType === "part") {
+          entityId = rowData.prt_id;
+          entityTypeStr = "part";
+          // Uppdatera part i project data
+          const part = findPartById(project, entityId);
+          if (part) {
+            part.prt_tags = currentTags || [];
+          }
+        } else if (entityType === "item") {
+          entityId = rowData.itm_id;
+          entityTypeStr = "item";
+          // Uppdatera item i project data
+          const item = findItemById(project, entityId);
+          if (item) {
+            item.itm_tags = currentTags || [];
+          }
+        } else if (entityType === "task") {
+          entityId = rowData.tsk_id;
+          entityTypeStr = "task";
+          // Uppdatera task i project data
+          const task = findTaskById(project, entityId);
+          if (task) {
+            task.tsk_tags = currentTags || [];
+          }
+        }
+        
+        // Skicka AJAX-anrop för tagguppdatering
+        handleTagUpdate(entityTypeStr, entityId, currentTags || [], oldTags);
+      }
+      
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
+    
+    cancelButton.addEventListener("click", () => {
+      cancel();
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
+    
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    });
+    
+    // Escape-tangent support
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    
+    overlay.appendChild(editorBox);
+    document.body.appendChild(overlay);
+    
+    // Initiera visningar
+    updateTagDisplay();
+    
+    // Fokusera på input
+    setTimeout(() => input.focus(), 100);
+    
+    onRendered(() => {});
+    
+    return document.createElement("div");
+  }
 }
 
 // Endast nödvändiga exports
