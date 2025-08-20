@@ -1,7 +1,6 @@
 /**
  * TagSystemUtils - Slimmad version för Tabulator tagg-hantering
- * Endast funktionalitet som används i main.js!
- * - Formatter, Editor, HeaderFilter, AND/OR-logik, filter utilities
+ * MED FÖRBÄTTRAT XSS-SKYDD
  */
 
 class TagSystemUtils {
@@ -43,15 +42,34 @@ class TagSystemUtils {
   }
 
   /**
-   * Enkel plaintext-rensning
+   * FÖRBÄTTRAD XSS-säker sanitering för taggar
    */
-  cleanPlaintext(text) {
+  sanitizeTag(text) {
     if (!text || typeof text !== 'string') return '';
-    return text.replace(/<[^>]*>/g, '').trim();
+    
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;")
+      .replace(/\//g, "&#x2F;")
+      .replace(/javascript:/gi, "")  // Ta bort javascript: protokoll
+      .replace(/data:/gi, "")        // Ta bort data: protokoll
+      .replace(/vbscript:/gi, "")    // Ta bort vbscript: (IE)
+      .replace(/on\w+=/gi, "")       // Ta bort onevent-attribut
+      .trim();
   }
 
   /**
-   * Formatter: visas som badges (med plaintext-skydd)
+   * Bakåtkompatibilitet - använder den säkra sanitize-funktionen
+   */
+  cleanPlaintext(text) {
+    return this.sanitizeTag(text);
+  }
+
+  /**
+   * Formatter: visas som badges (med XSS-skydd)
    */
   tagFormatter(cell) {
     const tags = cell.getValue() || [];
@@ -59,23 +77,31 @@ class TagSystemUtils {
     
     return (
       '<div class="tag-cell">' +
-      tags.map((tag) => `<span class="tag-badge">${this.cleanPlaintext(tag)}</span>`).join("") +
+      tags.map((tag) => `<span class="tag-badge">${this.sanitizeTag(tag)}</span>`).join("") +
       "</div>"
     );
   }
 
   /**
-   * Editor: enkel med plaintext-rensning
+   * Editor: enkel med XSS-skydd
    */
   tagEditor(cell, onRendered, success, cancel) {
     const input = document.createElement("input");
     input.type = "text";
+    input.maxLength = 100; // Begränsa längd för säkerhet
     input.value = (cell.getValue() || []).join(", ");
     
     input.addEventListener("blur", () => {
       const rawTags = input.value.split(",").map(s => s.trim()).filter(Boolean);
-      const cleanTags = rawTags.map(tag => this.cleanPlaintext(tag)).filter(Boolean);
+      const cleanTags = rawTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
       success(cleanTags);
+    });
+    
+    // Extra säkerhet - förhindra paste av skadlig kod
+    input.addEventListener("paste", (e) => {
+      setTimeout(() => {
+        input.value = this.sanitizeTag(input.value);
+      }, 0);
     });
     
     onRendered(() => input.focus());
@@ -91,7 +117,7 @@ class TagSystemUtils {
     data.forEach((row) => {
       if (Array.isArray(row.tags)) {
         row.tags.forEach((tag) => {
-          const cleanTag = this.cleanPlaintext(tag);
+          const cleanTag = this.sanitizeTag(tag);
           if (cleanTag) tags.add(cleanTag);
         });
       }
@@ -166,6 +192,7 @@ class TagSystemUtils {
     const updateDisplay = () => {
       selectedContainer.innerHTML = "";
       if (selectedTags.length === 0) {
+        // Använd textContent för säkerhet
         selectedContainer.textContent = "Filtrera taggar...";
         clearButton.style.display = "none";
         logicToggle.style.display = "block";
@@ -173,6 +200,7 @@ class TagSystemUtils {
         selectedTags.forEach(tag => {
           const tagBadge = document.createElement("span");
           tagBadge.className = "tag-badge";
+          // Använd textContent istället för innerHTML
           tagBadge.textContent = tag;
           selectedContainer.appendChild(tagBadge);
         });
@@ -188,6 +216,7 @@ class TagSystemUtils {
       allTags.forEach(tag => {
         const option = document.createElement("div");
         option.className = "tag-filter-option";
+        // Använd textContent för säkerhet
         option.textContent = tag;
         if (selectedTags.includes(tag)) option.classList.add("selected");
         option.addEventListener("click", (e) => {
@@ -199,11 +228,15 @@ class TagSystemUtils {
     };
 
     const toggleTag = (tag) => {
-      const idx = selectedTags.indexOf(tag);
+      // Sanitera taggen innan den används
+      const cleanTag = this.sanitizeTag(tag);
+      if (!cleanTag) return;
+      
+      const idx = selectedTags.indexOf(cleanTag);
       if (idx > -1) {
         selectedTags.splice(idx, 1);
       } else {
-        selectedTags.push(tag);
+        selectedTags.push(cleanTag);
       }
       this.currentFilter = [...selectedTags];
       updateDisplay();
@@ -282,7 +315,7 @@ class TagSystemUtils {
     // Init value
     const initialValue = cell.getValue();
     if (initialValue && Array.isArray(initialValue)) {
-      selectedTags = [...initialValue];
+      selectedTags = initialValue.map(tag => this.sanitizeTag(tag)).filter(Boolean);
       this.currentFilter = [...selectedTags];
     }
 
@@ -337,14 +370,17 @@ class TagSystemUtils {
   }
 
   /**
-   * Hämta befintliga taggar för parts
+   * Hämta befintliga taggar för parts (med XSS-skydd)
    */
   getExistingPartTags(project) {
     const partTags = new Set();
     
     project.prt_parts?.forEach(part => {
       if (Array.isArray(part.prt_tags)) {
-        part.prt_tags.forEach(tag => partTags.add(tag));
+        part.prt_tags.forEach(tag => {
+          const cleanTag = this.sanitizeTag(tag);
+          if (cleanTag) partTags.add(cleanTag);
+        });
       }
     });
     
@@ -352,7 +388,7 @@ class TagSystemUtils {
   }
 
   /**
-   * Hämta befintliga taggar för items
+   * Hämta befintliga taggar för items (med XSS-skydd)
    */
   getExistingItemTags(project) {
     const itemTags = new Set();
@@ -360,7 +396,10 @@ class TagSystemUtils {
     project.prt_parts?.forEach(part => {
       part.prt_items?.forEach(item => {
         if (Array.isArray(item.itm_tags)) {
-          item.itm_tags.forEach(tag => itemTags.add(tag));
+          item.itm_tags.forEach(tag => {
+            const cleanTag = this.sanitizeTag(tag);
+            if (cleanTag) itemTags.add(cleanTag);
+          });
         }
       });
     });
@@ -369,7 +408,7 @@ class TagSystemUtils {
   }
 
   /**
-   * Hämta befintliga taggar för tasks
+   * Hämta befintliga taggar för tasks (med XSS-skydd)
    */
   getExistingTaskTags(project) {
     const taskTags = new Set();
@@ -378,7 +417,10 @@ class TagSystemUtils {
       part.prt_items?.forEach(item => {
         item.itm_tasks?.forEach(task => {
           if (Array.isArray(task.tsk_tags)) {
-            task.tsk_tags.forEach(tag => taskTags.add(tag));
+            task.tsk_tags.forEach(tag => {
+              const cleanTag = this.sanitizeTag(tag);
+              if (cleanTag) taskTags.add(cleanTag);
+            });
           }
         });
       });
@@ -400,7 +442,7 @@ class TagSystemUtils {
   }
 
   /**
-   * Förbättrad tagg-editor (flyttad från main.js)
+   * Förbättrad tagg-editor med XSS-skydd (flyttad från main.js)
    */
   createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
     // Skapa overlay
@@ -417,7 +459,9 @@ class TagSystemUtils {
     title.textContent = "Redigera taggar";
     editorBox.appendChild(title);
     
-    let currentTags = Array.isArray(cell.getValue()) ? [...cell.getValue()] : [];
+    // Sanitera befintliga taggar
+    let currentTags = Array.isArray(cell.getValue()) ? 
+      cell.getValue().map(tag => this.sanitizeTag(tag)).filter(Boolean) : [];
     const existingTags = this.getExistingTagsForEntityType(entityType, project);
     
     // Sektion för valda taggar
@@ -465,6 +509,7 @@ class TagSystemUtils {
     const input = document.createElement("input");
     input.className = "tag-input";
     input.type = "text";
+    input.maxLength = 50; // Begränsa längd för säkerhet
     input.placeholder = "Skriv ny tagg...";
     inputContainer.appendChild(input);
     
@@ -492,18 +537,18 @@ class TagSystemUtils {
     
     editorBox.appendChild(buttonContainer);
     
-    // Funktion för att lägga till tagg
+    // Funktion för att lägga till tagg MED XSS-SKYDD
     const addTag = (tag) => {
-      const cleanTag = this.cleanPlaintext(tag);
-      if (cleanTag && !currentTags.includes(cleanTag)) {
+      const cleanTag = this.sanitizeTag(tag);
+      if (cleanTag && cleanTag.length > 0 && !currentTags.includes(cleanTag)) {
         currentTags.push(cleanTag);
         updateTagDisplay();
       }
     };
     
-    // Event listeners
+    // Event listeners MED XSS-SKYDD
     addButton.addEventListener("click", () => {
-      const cleanTag = this.cleanPlaintext(input.value);
+      const cleanTag = this.sanitizeTag(input.value);
       if (cleanTag) {
         addTag(cleanTag);
         input.value = "";
@@ -513,12 +558,27 @@ class TagSystemUtils {
     
     input.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
-        const cleanTag = this.cleanPlaintext(input.value);
+        const cleanTag = this.sanitizeTag(input.value);
         if (cleanTag) {
           addTag(cleanTag);
           input.value = "";
         }
       }
+    });
+    
+    // Extra XSS-skydd för input
+    input.addEventListener("input", (e) => {
+      // Real-time sanitering medan användaren skriver
+      const cleanValue = this.sanitizeTag(e.target.value);
+      if (e.target.value !== cleanValue) {
+        e.target.value = cleanValue;
+      }
+    });
+    
+    input.addEventListener("paste", (e) => {
+      setTimeout(() => {
+        input.value = this.sanitizeTag(input.value);
+      }, 0);
     });
     
     // Funktion för att uppdatera visning av valda taggar
@@ -536,6 +596,7 @@ class TagSystemUtils {
           tagEl.title = "Klicka för att ta bort";
           
           const tagText = document.createElement("span");
+          // Använd textContent för säkerhet
           tagText.textContent = tag;
           tagEl.appendChild(tagText);
           
@@ -565,6 +626,7 @@ class TagSystemUtils {
         availableNow.forEach(tag => {
           const tagEl = document.createElement("span");
           tagEl.className = "tag-item available";
+          // Använd textContent för säkerhet
           tagEl.textContent = tag;
           tagEl.title = "Klicka för att lägga till";
           tagEl.addEventListener("click", () => addTag(tag));
@@ -583,10 +645,13 @@ class TagSystemUtils {
     };
     
     saveButton.addEventListener("click", () => {
-      success(currentTags);
+      // Säkerställ att alla taggar är saniterade innan sparande
+      const sanitizedTags = currentTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
+      
+      success(sanitizedTags);
       const rowData = cell.getRow().getData();
       const oldTags = Array.isArray(rowData[tagField]) ? [...rowData[tagField]] : [];
-      rowData[tagField] = currentTags;
+      rowData[tagField] = sanitizedTags;
       cell.getRow().update(rowData);
       
       // AJAX-hantering för att uppdatera backend
@@ -599,7 +664,7 @@ class TagSystemUtils {
           // Uppdatera part i project data
           const part = findPartById(project, entityId);
           if (part) {
-            part.prt_tags = currentTags || [];
+            part.prt_tags = sanitizedTags || [];
           }
         } else if (entityType === "item") {
           entityId = rowData.itm_id;
@@ -607,7 +672,7 @@ class TagSystemUtils {
           // Uppdatera item i project data
           const item = findItemById(project, entityId);
           if (item) {
-            item.itm_tags = currentTags || [];
+            item.itm_tags = sanitizedTags || [];
           }
         } else if (entityType === "task") {
           entityId = rowData.tsk_id;
@@ -615,12 +680,12 @@ class TagSystemUtils {
           // Uppdatera task i project data
           const task = findTaskById(project, entityId);
           if (task) {
-            task.tsk_tags = currentTags || [];
+            task.tsk_tags = sanitizedTags || [];
           }
         }
         
-        // Skicka AJAX-anrop för tagguppdatering
-        handleTagUpdate(entityTypeStr, entityId, currentTags || [], oldTags);
+        // Skicka AJAX-anrop för tagguppdatering MED SANITERADE TAGGAR
+        handleTagUpdate(entityTypeStr, entityId, sanitizedTags || [], oldTags);
       }
       
       document.body.removeChild(overlay);
