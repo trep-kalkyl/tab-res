@@ -127,58 +127,77 @@ class CommentSanitizer {
         return result;
     }
     
-    // Auto-länka URL:er i text
-    static autoLinkUrls(text) {
-        if (!text || typeof text !== 'string') return text;
-        
-        // Använd en unik markör för att undvika dubbel-länkning
-        const LINK_MARKER = '___ALREADY_LINKED___';
-        let result = text;
-        
-        // 1. Skydda redan existerande länkar från att länkas igen
-        result = result.replace(/<a\s[^>]*href[^>]*>.*?<\/a>/gi, (match) => {
-            return LINK_MARKER + match + LINK_MARKER;
-        });
-        
-        // 2. Hantera fullständiga URL:er med protokoll
-        result = result.replace(/(^|\s)(https?:\/\/[^\s<>"']+)/gi, (match, prefix, url) => {
-            if (this.isValidUrl(url)) {
-                return `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>`;
-            }
+// Auto-länka URL:er i text - UPPDATERAD VERSION
+static autoLinkUrls(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    // Använd en unik markör för att undvika dubbel-länkning
+    const LINK_MARKER = '___ALREADY_LINKED___';
+    let result = text;
+    
+    // 1. Skydda redan existerande länkar från att länkas igen
+    result = result.replace(/<a\s[^>]*href[^>]*>.*?<\/a>/gi, (match) => {
+        return LINK_MARKER + match + LINK_MARKER;
+    });
+    
+    // 2. Hantera e-postadresser FÖRST (innan domän-matching)
+    result = result.replace(/(^|\s)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi, (match, prefix, email) => {
+        const mailtoUrl = `mailto:${email}`;
+        if (this.isValidUrl(mailtoUrl)) {
+            return `${prefix}<a href="${this.escapeHtml(mailtoUrl)}">${this.escapeHtml(email)}</a>`;
+        }
+        return match;
+    });
+    
+    // 3. Hantera fullständiga URL:er med protokoll
+    result = result.replace(/(^|\s)(https?:\/\/[^\s<>"']+)/gi, (match, prefix, url) => {
+        if (this.isValidUrl(url)) {
+            return `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>`;
+        }
+        return match;
+    });
+    
+    // 4. Hantera www.domain.com
+    result = result.replace(/(^|\s)(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
+        // Skippa om det redan är del av en e-postadress som blivit länkad
+        if (match.includes('@')) {
             return match;
-        });
+        }
         
-        // 3. Hantera www.domain.com
-        result = result.replace(/(^|\s)(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
+        const fullUrl = `https://${domain}`;
+        if (this.isValidUrl(fullUrl)) {
+            return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+        }
+        return match;
+    });
+    
+    // 5. Hantera enkla domäner (men bara om de inte redan är länkade eller är e-postadresser)
+    result = result.replace(/(^|\s)([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
+        // Skippa om det innehåller @ (e-postadress som redan hanterats)
+        if (domain.includes('@')) {
+            return match;
+        }
+        
+        // Skippa vanliga ord som innehåller punkter men inte är domäner
+        if (domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
+            return match;
+        }
+        
+        const parts = domain.split('.');
+        if (parts.length >= 2 && parts[0].length > 1 && parts[parts.length - 1].length >= 2) {
             const fullUrl = `https://${domain}`;
             if (this.isValidUrl(fullUrl)) {
                 return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
             }
-            return match;
-        });
-        
-        // 4. Hantera enkla domäner (men bara om de inte redan är länkade)
-        result = result.replace(/(^|\s)([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
-            // Skippa vanliga ord som innehåller punkter men inte är domäner
-            if (domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
-                return match;
-            }
-            
-            const parts = domain.split('.');
-            if (parts.length >= 2 && parts[0].length > 1 && parts[parts.length - 1].length >= 2) {
-                const fullUrl = `https://${domain}`;
-                if (this.isValidUrl(fullUrl)) {
-                    return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
-                }
-            }
-            return match;
-        });
-        
-        // 5. Återställ skyddade länkar
-        result = result.replace(new RegExp(LINK_MARKER, 'g'), '');
-        
-        return result;
-    }
+        }
+        return match;
+    });
+    
+    // 6. Återställ skyddade länkar
+    result = result.replace(new RegExp(LINK_MARKER, 'g'), '');
+    
+    return result;
+}
     
     // Huvudsakliga sanitize-funktionen
     static sanitize(text, options = {}) {
