@@ -132,53 +132,73 @@ class CommentSanitizer {
     static autoLinkUrls(text) {
         if (!text || typeof text !== 'string') return text;
         
+        console.log('🔍 autoLinkUrls input:', text);
+        
         // Använd en unik markör för att undvika dubbel-länkning
         const LINK_MARKER = '___ALREADY_LINKED___';
         let result = text;
         
         // 1. Skydda redan existerande länkar från att länkas igen
         result = result.replace(/<a\s[^>]*href[^>]*>.*?<\/a>/gi, (match) => {
+            console.log('🔒 Skyddar befintlig länk:', match);
             return LINK_MARKER + match + LINK_MARKER;
         });
         
-        // 2. Hantera markdown bold (**text**) - konvertera till HTML
-        result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        
-        // 3. Hantera e-postadresser FÖRST (innan domän-matching)
-        result = result.replace(/(^|\s|>)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(\s|<|$)/gi, (match, prefix, email, suffix) => {
+        // 2. Hantera e-postadresser FÖRST och MEST SPECIFIKT
+        result = result.replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi, (match, email) => {
+            console.log('📧 Hittade e-post:', email);
             const mailtoUrl = `mailto:${email}`;
             if (this.isValidUrl(mailtoUrl)) {
-                return `${prefix}<a href="${this.escapeHtml(mailtoUrl)}">${this.escapeHtml(email)}</a>${suffix}`;
+                const linkedEmail = `<a href="${this.escapeHtml(mailtoUrl)}">${this.escapeHtml(email)}</a>`;
+                console.log('📧 Länkad e-post:', linkedEmail);
+                return linkedEmail;
             }
             return match;
         });
+        
+        // 3. Hantera markdown bold (**text**) - konvertera till HTML
+        result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        console.log('📝 Efter markdown-konvertering:', result);
         
         // 4. Hantera fullständiga URL:er med protokoll
-        result = result.replace(/(^|\s|>)(https?:\/\/[^\s<>"']+)(\s|<|$)/gi, (match, prefix, url, suffix) => {
+        result = result.replace(/(^|\s|>)(https?:\/\/[^\s<>"']+)(\s|<|$|\.)/gi, (match, prefix, url, suffix) => {
+            console.log('🌐 Hittade URL:', url);
             if (this.isValidUrl(url)) {
-                return `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>${suffix}`;
+                const linkedUrl = `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>${suffix}`;
+                console.log('🌐 Länkad URL:', linkedUrl);
+                return linkedUrl;
             }
             return match;
         });
         
-        // 5. Hantera www.domain.com
+        // 5. Hantera www.domain.com (kontrollera att det inte redan är länkat från e-post-steget)
         result = result.replace(/(^|\s|>)(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
-            // Skippa om det redan är del av en e-postadress som blivit länkad
-            if (match.includes('@')) {
+            console.log('🌍 Kollar www-domän:', domain);
+            
+            // Kolla om denna domän redan är del av en länkad e-postadress
+            const beforeMatch = result.substring(0, result.indexOf(match));
+            if (beforeMatch.includes(`">${domain}</a>`) || beforeMatch.includes(`mailto:${domain}`)) {
+                console.log('🌍 Skippar - redan länkad som e-post');
                 return match;
             }
             
             const fullUrl = `https://${domain}`;
             if (this.isValidUrl(fullUrl)) {
-                return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+                const linkedDomain = `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+                console.log('🌍 Länkad www-domän:', linkedDomain);
+                return linkedDomain;
             }
             return match;
         });
         
-        // 6. Hantera enkla domäner (men bara om de inte redan är länkade eller är e-postadresser)
+        // 6. Hantera enkla domäner (sista och mest försiktig)
         result = result.replace(/(^|\s|>)([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
-            // Skippa om det innehåller @ (e-postadress som redan hanterats)
-            if (domain.includes('@')) {
+            console.log('🏠 Kollar enkel domän:', domain);
+            
+            // Kolla om denna domän redan är del av en länkad e-postadress eller URL
+            const beforeMatch = result.substring(0, result.indexOf(match));
+            if (beforeMatch.includes(`">${domain}</a>`) || beforeMatch.includes(`mailto:`) || beforeMatch.includes(domain)) {
+                console.log('🏠 Skippar - redan processad');
                 return match;
             }
             
@@ -191,7 +211,9 @@ class CommentSanitizer {
             if (parts.length >= 2 && parts[0].length > 1 && parts[parts.length - 1].length >= 2) {
                 const fullUrl = `https://${domain}`;
                 if (this.isValidUrl(fullUrl)) {
-                    return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+                    const linkedDomain = `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+                    console.log('🏠 Länkad enkel domän:', linkedDomain);
+                    return linkedDomain;
                 }
             }
             return match;
@@ -200,6 +222,7 @@ class CommentSanitizer {
         // 7. Återställ skyddade länkar
         result = result.replace(new RegExp(LINK_MARKER, 'g'), '');
         
+        console.log('✅ autoLinkUrls slutresultat:', result);
         return result;
     }
     
