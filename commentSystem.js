@@ -441,22 +441,33 @@ class CommentModalManager {
         return commentsContainer;
     }
     
-    buildCommentsList(comments, container) {
-        const sanitizedComments = CommentSanitizer.sanitizeComments(comments, { allowHtml: this.htmlModeEnabled });
-        
-        const fragment = document.createDocumentFragment();
-        
-        const sortedComments = [...sanitizedComments].sort((a, b) => 
-            new Date(b.timestamp) - new Date(a.timestamp));
-        
-        sortedComments.forEach(comment => {
-            const commentElement = this.createCommentElement(comment);
-            fragment.appendChild(commentElement);
-        });
-        
-        container.innerHTML = '';
-        container.appendChild(fragment);
-    }
+buildCommentsList(comments, container) {
+    // VIKTIGT: Auto-länka befintliga kommentarer före sanitering
+    const processedComments = comments.map(comment => {
+        if (comment && comment.text) {
+            return {
+                ...comment,
+                text: CommentSanitizer.autoLinkUrls(comment.text)
+            };
+        }
+        return comment;
+    });
+    
+    const sanitizedComments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: this.htmlModeEnabled });
+    
+    const fragment = document.createDocumentFragment();
+    
+    const sortedComments = [...sanitizedComments].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp));
+    
+    sortedComments.forEach(comment => {
+        const commentElement = this.createCommentElement(comment);
+        fragment.appendChild(commentElement);
+    });
+    
+    container.innerHTML = '';
+    container.appendChild(fragment);
+}
     
     createCommentElement(comment) {
         const commentElement = document.createElement('div');
@@ -656,7 +667,7 @@ class CommentModalManager {
     }
 }
 
-// CommentFormatter för HTML-rendering
+// CommentFormatter för HTML-rendering - UPPDATERAD VERSION
 class CommentFormatter {
     static format(cell, type = 'item') {
         const fieldName = {
@@ -667,7 +678,19 @@ class CommentFormatter {
         }[type] || 'itm_comments';
         
         const rawComments = cell.getValue() || [];
-        const comments = CommentSanitizer.sanitizeComments(rawComments, { allowHtml: true });
+        
+        // VIKTIGT: Kör auto-linking på befintliga kommentarer innan sanitering
+        const processedComments = rawComments.map(comment => {
+            if (comment && comment.text) {
+                return {
+                    ...comment,
+                    text: CommentSanitizer.autoLinkUrls(comment.text) // Auto-länka först
+                };
+            }
+            return comment;
+        });
+        
+        const comments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: true });
         const count = comments.length;
         
         const element = document.createElement('div');
@@ -690,10 +713,12 @@ class CommentFormatter {
                 const textContent = tempDiv.textContent;
                 
                 if (textContent.length > 30) {
+                    // För långa kommentarer, visa truncerad text men behåll länk-funktionalitet
                     const truncated = textContent.substring(0, 30) + "...";
                     textSpan.textContent = truncated;
+                    textSpan.title = textContent; // Tooltip med full text
                 } else {
-                    // Använd innerHTML för att visa HTML-formatting
+                    // Använd innerHTML för att visa HTML-formatting inklusive länkar
                     textSpan.innerHTML = latestComment.text;
                 }
             } else {
