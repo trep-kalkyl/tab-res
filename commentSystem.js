@@ -1,5 +1,6 @@
 // ====================================
 // Tabulator Comments Module - Export Version
+// Clean text storage with HTML rendering in overlay only
 // ====================================
 
 // CommentSanitizer med säker länkhantering
@@ -127,105 +128,93 @@ class CommentSanitizer {
         return result;
     }
     
-// Auto-länka URL:er i text - UPPDATERAD VERSION
-static autoLinkUrls(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    // Använd en unik markör för att undvika dubbel-länkning
-    const LINK_MARKER = '___ALREADY_LINKED___';
-    let result = text;
-    
-    // 1. Skydda redan existerande länkar från att länkas igen
-    result = result.replace(/<a\s[^>]*href[^>]*>.*?<\/a>/gi, (match) => {
-        return LINK_MARKER + match + LINK_MARKER;
-    });
-    
-    // 2. Hantera e-postadresser FÖRST (innan domän-matching)
-    result = result.replace(/(^|\s)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi, (match, prefix, email) => {
-        const mailtoUrl = `mailto:${email}`;
-        if (this.isValidUrl(mailtoUrl)) {
-            return `${prefix}<a href="${this.escapeHtml(mailtoUrl)}">${this.escapeHtml(email)}</a>`;
-        }
-        return match;
-    });
-    
-    // 3. Hantera fullständiga URL:er med protokoll
-    result = result.replace(/(^|\s)(https?:\/\/[^\s<>"']+)/gi, (match, prefix, url) => {
-        if (this.isValidUrl(url)) {
-            return `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>`;
-        }
-        return match;
-    });
-    
-    // 4. Hantera www.domain.com
-    result = result.replace(/(^|\s)(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
-        // Skippa om det redan är del av en e-postadress som blivit länkad
-        if (match.includes('@')) {
-            return match;
-        }
+    // Auto-länka URL:er i text - ENDAST FÖR VISNING
+    static autoLinkUrls(text) {
+        if (!text || typeof text !== 'string') return text;
         
-        const fullUrl = `https://${domain}`;
-        if (this.isValidUrl(fullUrl)) {
-            return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
-        }
-        return match;
-    });
-    
-    // 5. Hantera enkla domäner (men bara om de inte redan är länkade eller är e-postadresser)
-    result = result.replace(/(^|\s)([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
-        // Skippa om det innehåller @ (e-postadress som redan hanterats)
-        if (domain.includes('@')) {
-            return match;
-        }
+        // Använd en unik markör för att undvika dubbel-länkning
+        const LINK_MARKER = '___ALREADY_LINKED___';
+        let result = text;
         
-        // Skippa vanliga ord som innehåller punkter men inte är domäner
-        if (domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
-            return match;
-        }
+        // 1. Skydda redan existerande länkar från att länkas igen
+        result = result.replace(/<a\s[^>]*href[^>]*>.*?<\/a>/gi, (match) => {
+            return LINK_MARKER + match + LINK_MARKER;
+        });
         
-        const parts = domain.split('.');
-        if (parts.length >= 2 && parts[0].length > 1 && parts[parts.length - 1].length >= 2) {
+        // 2. Hantera markdown bold (**text**) - konvertera till HTML
+        result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        // 3. Hantera e-postadresser FÖRST (innan domän-matching)
+        result = result.replace(/(^|\s|>)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(\s|<|$)/gi, (match, prefix, email, suffix) => {
+            const mailtoUrl = `mailto:${email}`;
+            if (this.isValidUrl(mailtoUrl)) {
+                return `${prefix}<a href="${this.escapeHtml(mailtoUrl)}">${this.escapeHtml(email)}</a>${suffix}`;
+            }
+            return match;
+        });
+        
+        // 4. Hantera fullständiga URL:er med protokoll
+        result = result.replace(/(^|\s|>)(https?:\/\/[^\s<>"']+)(\s|<|$)/gi, (match, prefix, url, suffix) => {
+            if (this.isValidUrl(url)) {
+                return `${prefix}<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>${suffix}`;
+            }
+            return match;
+        });
+        
+        // 5. Hantera www.domain.com
+        result = result.replace(/(^|\s|>)(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
+            // Skippa om det redan är del av en e-postadress som blivit länkad
+            if (match.includes('@')) {
+                return match;
+            }
+            
             const fullUrl = `https://${domain}`;
             if (this.isValidUrl(fullUrl)) {
                 return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
             }
-        }
-        return match;
-    });
+            return match;
+        });
+        
+        // 6. Hantera enkla domäner (men bara om de inte redan är länkade eller är e-postadresser)
+        result = result.replace(/(^|\s|>)([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?)/gi, (match, prefix, domain) => {
+            // Skippa om det innehåller @ (e-postadress som redan hanterats)
+            if (domain.includes('@')) {
+                return match;
+            }
+            
+            // Skippa vanliga ord som innehåller punkter men inte är domäner
+            if (domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
+                return match;
+            }
+            
+            const parts = domain.split('.');
+            if (parts.length >= 2 && parts[0].length > 1 && parts[parts.length - 1].length >= 2) {
+                const fullUrl = `https://${domain}`;
+                if (this.isValidUrl(fullUrl)) {
+                    return `${prefix}<a href="${this.escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(domain)}</a>`;
+                }
+            }
+            return match;
+        });
+        
+        // 7. Återställ skyddade länkar
+        result = result.replace(new RegExp(LINK_MARKER, 'g'), '');
+        
+        return result;
+    }
     
-    // 6. Återställ skyddade länkar
-    result = result.replace(new RegExp(LINK_MARKER, 'g'), '');
-    
-    return result;
-}
-    
-    // Huvudsakliga sanitize-funktionen
+    // Huvudsakliga sanitize-funktionen - ENDAST TEXT-RENSNING
     static sanitize(text, options = {}) {
         if (!text || typeof text !== 'string') return '';
         
         const {
-            allowHtml = true,
-            autoLink = true,
             maxLength = 1000
         } = options;
         
-        // Begränsa längd först
+        // Begränsa längd och rensa farlig text - INGEN auto-linking här
         let sanitized = text.slice(0, maxLength);
         
-        // Auto-länka URL:er FÖRST (innan HTML-sanitering)
-        if (autoLink) {
-            sanitized = this.autoLinkUrls(sanitized);
-        }
-        
-        if (allowHtml) {
-            // Tillåt säker HTML (inkluderar nu auto-länkade URL:er)
-            sanitized = this.sanitizeHtml(sanitized);
-        } else {
-            // Escape all HTML
-            sanitized = this.escapeHtml(sanitized);
-        }
-        
-        // Ta bort skadliga protokoll och event handlers
+        // Ta bort skadliga protokoll och event handlers från rå text
         sanitized = sanitized
             .replace(/javascript:/gi, "")
             .replace(/data:/gi, "")
@@ -235,7 +224,7 @@ static autoLinkUrls(text) {
         return sanitized.trim();
     }
     
-    // Sanitera kommentarsobjekt
+    // Sanitera kommentarsobjekt - ENDAST TEXT
     static sanitizeComment(comment, options = {}) {
         if (!comment || typeof comment !== 'object') return null;
         
@@ -247,7 +236,7 @@ static autoLinkUrls(text) {
         };
     }
     
-    // Sanitera array av kommentarer
+    // Sanitera array av kommentarer - ENDAST TEXT
     static sanitizeComments(comments, options = {}) {
         if (!Array.isArray(comments)) return [];
         
@@ -257,30 +246,24 @@ static autoLinkUrls(text) {
     }
 }
 
-// CommentValidator med HTML-stöd
+// CommentValidator - endast text-validering
 class CommentValidator {
     static validate(text, options = {}) {
         const errors = [];
-        const { allowHtml = true } = options;
         
         if (!text || typeof text !== 'string') {
             errors.push('Comment text is required');
         } else {
-            // Sanitera med HTML-stöd
-            const sanitized = CommentSanitizer.sanitize(text, { allowHtml });
+            // Sanitera ENDAST text (ingen HTML-processning)
+            const sanitized = CommentSanitizer.sanitize(text);
             
-            // Räkna tecken i ren text (utan HTML-taggar) för längdvalidering
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sanitized;
-            const textLength = tempDiv.textContent.length;
-            
-            if (textLength === 0) {
+            if (sanitized.length === 0) {
                 errors.push('Comment cannot be empty');
             }
-            if (textLength > 1000) {
+            if (sanitized.length > 1000) {
                 errors.push('Comment too long (max 1000 characters)');
             }
-            if (textLength < 2) {
+            if (sanitized.length < 2) {
                 errors.push('Comment too short (min 2 characters)');
             }
         }
@@ -288,7 +271,7 @@ class CommentValidator {
         return {
             isValid: errors.length === 0,
             errors: errors,
-            text: text ? CommentSanitizer.sanitize(text.trim(), { allowHtml }) : ''
+            text: text ? CommentSanitizer.sanitize(text.trim()) : ''
         };
     }
 }
@@ -323,7 +306,7 @@ class TimestampManager {
     }
 }
 
-// CommentModalManager med HTML-stöd
+// CommentModalManager - HTML endast i visning
 class CommentModalManager {
     constructor(modalId = 'commentModal') {
         this.modalId = modalId;
@@ -336,7 +319,6 @@ class CommentModalManager {
         this.tables = {};
         this.eventListeners = [];
         this.isInitialized = false;
-        this.htmlModeEnabled = true;
         this.onCommentUpdate = null; // Callback för externa uppdateringar
         
         this.init();
@@ -441,33 +423,36 @@ class CommentModalManager {
         return commentsContainer;
     }
     
-buildCommentsList(comments, container) {
-    // VIKTIGT: Auto-länka befintliga kommentarer före sanitering
-    const processedComments = comments.map(comment => {
-        if (comment && comment.text) {
-            return {
-                ...comment,
-                text: CommentSanitizer.autoLinkUrls(comment.text)
-            };
-        }
-        return comment;
-    });
+    // Konvertera text till HTML för visning i overlay
+    convertTextToDisplayHtml(text) {
+        if (!text || typeof text !== 'string') return '';
+        
+        // 1. Auto-länka URLs och emails
+        let html = CommentSanitizer.autoLinkUrls(text);
+        
+        // 2. Säkerställ att resultatet är säkert
+        html = CommentSanitizer.sanitizeHtml(html);
+        
+        return html;
+    }
     
-    const sanitizedComments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: this.htmlModeEnabled });
-    
-    const fragment = document.createDocumentFragment();
-    
-    const sortedComments = [...sanitizedComments].sort((a, b) => 
-        new Date(b.timestamp) - new Date(a.timestamp));
-    
-    sortedComments.forEach(comment => {
-        const commentElement = this.createCommentElement(comment);
-        fragment.appendChild(commentElement);
-    });
-    
-    container.innerHTML = '';
-    container.appendChild(fragment);
-}
+    buildCommentsList(comments, container) {
+        // Kommentarerna är redan text-saniterade, konvertera endast för visning
+        const sanitizedComments = CommentSanitizer.sanitizeComments(comments, { allowHtml: false });
+        
+        const fragment = document.createDocumentFragment();
+        
+        const sortedComments = [...sanitizedComments].sort((a, b) => 
+            new Date(b.timestamp) - new Date(a.timestamp));
+        
+        sortedComments.forEach(comment => {
+            const commentElement = this.createCommentElement(comment);
+            fragment.appendChild(commentElement);
+        });
+        
+        container.innerHTML = '';
+        container.appendChild(fragment);
+    }
     
     createCommentElement(comment) {
         const commentElement = document.createElement('div');
@@ -479,12 +464,8 @@ buildCommentsList(comments, container) {
         `;
         
         const commentText = document.createElement('div');
-        // Använd innerHTML för HTML-kommentarer (redan saniterade)
-        if (this.htmlModeEnabled) {
-            commentText.innerHTML = comment.text;
-        } else {
-            commentText.textContent = comment.text;
-        }
+        // Konvertera text till HTML med länkar ENDAST för visning
+        commentText.innerHTML = this.convertTextToDisplayHtml(comment.text);
         commentText.style.marginBottom = '4px';
         
         const commentTime = document.createElement('div');
@@ -500,95 +481,45 @@ buildCommentsList(comments, container) {
         return commentElement;
     }
     
-show(row, itemName, type = 'item') {
-    if (!this.isInitialized) {
-        console.error('CommentModalManager not properly initialized');
-        return;
-    }
-    
-    this.currentRow = row;
-    this.commentType = type;
-    
-    const fieldName = this.getCommentFieldName(type);
-    const rawComments = row.getData()[fieldName] || [];
-    
-    // VIKTIGT: Kolla om kommentarerna behöver auto-linking och fixa det
-    const processedComments = rawComments.map(comment => {
-        if (comment && comment.text && typeof comment.text === 'string') {
-            // Kolla om texten redan innehåller länkar
-            const hasExistingLinks = comment.text.includes('<a ') && comment.text.includes('href=');
-            
-            if (!hasExistingLinks) {
-                // Inga länkar finns - kör auto-linking
-                return {
-                    ...comment,
-                    text: CommentSanitizer.autoLinkUrls(comment.text)
-                };
-            } else {
-                // Kontrollera om det finns olänkade URLs/emails bredvid befintliga länkar
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = comment.text;
-                const textContent = tempDiv.textContent || tempDiv.innerText || '';
-                
-                // Enkla regex-kontroller för olänkade URLs/emails
-                const hasUnlinkedUrls = /(?<!href=["'])(https?:\/\/[^\s<>"']+)(?![^<]*<\/a>)/.test(comment.text) ||
-                                       /(?<!href=["'])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?![^<]*<\/a>)/.test(comment.text) ||
-                                       /(?<!href=["'])(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,})(?![^<]*<\/a>)/.test(comment.text);
-                
-                if (hasUnlinkedUrls) {
-                    // Det finns olänkade URLs - kör auto-linking
-                    return {
-                        ...comment,
-                        text: CommentSanitizer.autoLinkUrls(comment.text)
-                    };
-                }
-            }
+    show(row, itemName, type = 'item') {
+        if (!this.isInitialized) {
+            console.error('CommentModalManager not properly initialized');
+            return;
         }
-        return comment; // Returnera oförändrad om inget behöver göras
-    });
-    
-    // Uppdatera row data om några kommentarer processerades
-    const hasChanges = processedComments.some((comment, index) => 
-        comment.text !== rawComments[index]?.text
-    );
-    
-    if (hasChanges) {
-        const rowData = row.getData();
-        rowData[fieldName] = processedComments;
-        row.update({...rowData});
         
-        // Kalla extern callback för uppdateringar
-        if (this.onCommentUpdate) {
-            this.onCommentUpdate(this.commentType, rowData, fieldName, null, 'auto_link_update');
+        this.currentRow = row;
+        this.commentType = type;
+        
+        const fieldName = this.getCommentFieldName(type);
+        const rawComments = row.getData()[fieldName] || [];
+        
+        // Sanitera endast text - INGEN auto-linking av lagad data
+        const comments = CommentSanitizer.sanitizeComments(rawComments, { allowHtml: false });
+        
+        this.title.textContent = `Comments for ${CommentSanitizer.escapeHtml(itemName)}`;
+        
+        const commentsContainer = this.createCommentsContainer();
+        
+        if (comments.length > 0) {
+            this.buildCommentsList(comments, commentsContainer);
+            this.timestamp.textContent = `${comments.length} comment${comments.length !== 1 ? 's' : ''}`;
+        } else {
+            commentsContainer.innerHTML = '<p style="color: #888; font-style: italic; text-align: center;">No comments yet</p>';
+            this.timestamp.textContent = 'No comments yet';
         }
+        
+        this.input.value = '';
+        this.input.disabled = false;
+        this.input.placeholder = 'Add a new comment... (URLs and emails will be auto-linked)';
+        this.input.maxLength = 1000;
+        
+        document.getElementById('saveComment').textContent = 'Add Comment';
+        document.getElementById('cancelComment').textContent = 'Close';
+        
+        this.modal.style.display = 'block';
+        setTimeout(() => this.modal.classList.add('active'), 50);
+        this.input.focus();
     }
-    
-    const comments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: this.htmlModeEnabled });
-    
-    this.title.textContent = `Comments for ${CommentSanitizer.escapeHtml(itemName)}`;
-    
-    const commentsContainer = this.createCommentsContainer();
-    
-    if (comments.length > 0) {
-        this.buildCommentsList(comments, commentsContainer);
-        this.timestamp.textContent = `${comments.length} comment${comments.length !== 1 ? 's' : ''}`;
-    } else {
-        commentsContainer.innerHTML = '<p style="color: #888; font-style: italic; text-align: center;">No comments yet</p>';
-        this.timestamp.textContent = 'No comments yet';
-    }
-    
-    this.input.value = '';
-    this.input.disabled = false;
-    this.input.placeholder = 'Add a new comment... (HTML links allowed: <a href="url">text</a>)';
-    this.input.maxLength = 1000;
-    
-    document.getElementById('saveComment').textContent = 'Add Comment';
-    document.getElementById('cancelComment').textContent = 'Close';
-    
-    this.modal.style.display = 'block';
-    setTimeout(() => this.modal.classList.add('active'), 50);
-    this.input.focus();
-}
     
     hide() {
         if (this.modal) {
@@ -624,15 +555,17 @@ show(row, itemName, type = 'item') {
     saveComment() {
         if (!this.currentRow || !this.input) return;
         
-        const validation = CommentValidator.validate(this.input.value, { allowHtml: this.htmlModeEnabled });
+        // Validera ENDAST text - ingen HTML-processning
+        const validation = CommentValidator.validate(this.input.value, { allowHtml: false });
         if (!validation.isValid) {
             alert('Error: ' + validation.errors[0]);
             this.input.focus();
             return;
         }
         
+        // Spara som REN TEXT - ingen auto-linking i sparad data
         const newComment = {
-            text: validation.text,
+            text: validation.text, // Ren text utan HTML
             timestamp: TimestampManager.generate()
         };
         
@@ -644,11 +577,12 @@ show(row, itemName, type = 'item') {
         }
         
         rowData[fieldName].push(newComment);
-        rowData[fieldName] = CommentSanitizer.sanitizeComments(rowData[fieldName], { allowHtml: this.htmlModeEnabled });
+        // Sanitera endast text, ingen HTML
+        rowData[fieldName] = CommentSanitizer.sanitizeComments(rowData[fieldName], { allowHtml: false });
         
         this.currentRow.update({...rowData});
         
-        // Kalla extern callback för uppdateringar (för AJAX etc)
+        // Kalla extern callback för uppdateringar (skickar ren text till AJAX)
         if (this.onCommentUpdate) {
             this.onCommentUpdate(this.commentType, rowData, fieldName, newComment);
         }
@@ -658,6 +592,7 @@ show(row, itemName, type = 'item') {
         
         const commentsContainer = document.getElementById('commentsContainer');
         if (commentsContainer && commentsContainer.children.length > 0) {
+            // Skapa element med HTML-länkar för visning
             const newCommentElement = this.createCommentElement(newComment);
             commentsContainer.insertBefore(newCommentElement, commentsContainer.firstChild);
         } else {
@@ -718,7 +653,7 @@ show(row, itemName, type = 'item') {
     }
 }
 
-// CommentFormatter för HTML-rendering - UPPDATERAD VERSION
+// CommentFormatter för tabellvisning - endast text med badge
 class CommentFormatter {
     static format(cell, type = 'item') {
         const fieldName = {
@@ -729,19 +664,7 @@ class CommentFormatter {
         }[type] || 'itm_comments';
         
         const rawComments = cell.getValue() || [];
-        
-        // VIKTIGT: Kör auto-linking på befintliga kommentarer innan sanitering
-        const processedComments = rawComments.map(comment => {
-            if (comment && comment.text) {
-                return {
-                    ...comment,
-                    text: CommentSanitizer.autoLinkUrls(comment.text) // Auto-länka först
-                };
-            }
-            return comment;
-        });
-        
-        const comments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: true });
+        const comments = CommentSanitizer.sanitizeComments(rawComments, { allowHtml: false });
         const count = comments.length;
         
         const element = document.createElement('div');
@@ -758,19 +681,15 @@ class CommentFormatter {
             const latestComment = comments[comments.length - 1];
             
             if (latestComment && latestComment.text) {
-                // Skapa temporär div för att räkna ren textlängd
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = latestComment.text;
-                const textContent = tempDiv.textContent;
+                // Visa endast text i tabellcellen (ingen HTML)
+                const textContent = latestComment.text;
                 
                 if (textContent.length > 30) {
-                    // För långa kommentarer, visa truncerad text men behåll länk-funktionalitet
                     const truncated = textContent.substring(0, 30) + "...";
                     textSpan.textContent = truncated;
                     textSpan.title = textContent; // Tooltip med full text
                 } else {
-                    // Använd innerHTML för att visa HTML-formatting inklusive länkar
-                    textSpan.innerHTML = latestComment.text;
+                    textSpan.textContent = textContent;
                 }
             } else {
                 textSpan.textContent = "Invalid comment";
@@ -817,7 +736,6 @@ class TabulatorCommentsModule {
             maxCommentLength: Math.min(config.maxCommentLength || 1000, 1000),
             minCommentLength: Math.max(config.minCommentLength || 2, 1),
             truncateLength: Math.min(config.truncateLength || 30, 100),
-            allowHtml: config.allowHtml !== false, // Default true
             ...config
         };
     }
