@@ -500,44 +500,95 @@ buildCommentsList(comments, container) {
         return commentElement;
     }
     
-    show(row, itemName, type = 'item') {
-        if (!this.isInitialized) {
-            console.error('CommentModalManager not properly initialized');
-            return;
-        }
-        
-        this.currentRow = row;
-        this.commentType = type;
-        
-        const fieldName = this.getCommentFieldName(type);
-        const rawComments = row.getData()[fieldName] || [];
-        
-        const comments = CommentSanitizer.sanitizeComments(rawComments, { allowHtml: this.htmlModeEnabled });
-        
-        this.title.textContent = `Comments for ${CommentSanitizer.escapeHtml(itemName)}`;
-        
-        const commentsContainer = this.createCommentsContainer();
-        
-        if (comments.length > 0) {
-            this.buildCommentsList(comments, commentsContainer);
-            this.timestamp.textContent = `${comments.length} comment${comments.length !== 1 ? 's' : ''}`;
-        } else {
-            commentsContainer.innerHTML = '<p style="color: #888; font-style: italic; text-align: center;">No comments yet</p>';
-            this.timestamp.textContent = 'No comments yet';
-        }
-        
-        this.input.value = '';
-        this.input.disabled = false;
-        this.input.placeholder = 'Add a new comment... (HTML links allowed: <a href="url">text</a>)';
-        this.input.maxLength = 1000;
-        
-        document.getElementById('saveComment').textContent = 'Add Comment';
-        document.getElementById('cancelComment').textContent = 'Close';
-        
-        this.modal.style.display = 'block';
-        setTimeout(() => this.modal.classList.add('active'), 50);
-        this.input.focus();
+show(row, itemName, type = 'item') {
+    if (!this.isInitialized) {
+        console.error('CommentModalManager not properly initialized');
+        return;
     }
+    
+    this.currentRow = row;
+    this.commentType = type;
+    
+    const fieldName = this.getCommentFieldName(type);
+    const rawComments = row.getData()[fieldName] || [];
+    
+    // VIKTIGT: Kolla om kommentarerna behöver auto-linking och fixa det
+    const processedComments = rawComments.map(comment => {
+        if (comment && comment.text && typeof comment.text === 'string') {
+            // Kolla om texten redan innehåller länkar
+            const hasExistingLinks = comment.text.includes('<a ') && comment.text.includes('href=');
+            
+            if (!hasExistingLinks) {
+                // Inga länkar finns - kör auto-linking
+                return {
+                    ...comment,
+                    text: CommentSanitizer.autoLinkUrls(comment.text)
+                };
+            } else {
+                // Kontrollera om det finns olänkade URLs/emails bredvid befintliga länkar
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = comment.text;
+                const textContent = tempDiv.textContent || tempDiv.innerText || '';
+                
+                // Enkla regex-kontroller för olänkade URLs/emails
+                const hasUnlinkedUrls = /(?<!href=["'])(https?:\/\/[^\s<>"']+)(?![^<]*<\/a>)/.test(comment.text) ||
+                                       /(?<!href=["'])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?![^<]*<\/a>)/.test(comment.text) ||
+                                       /(?<!href=["'])(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,})(?![^<]*<\/a>)/.test(comment.text);
+                
+                if (hasUnlinkedUrls) {
+                    // Det finns olänkade URLs - kör auto-linking
+                    return {
+                        ...comment,
+                        text: CommentSanitizer.autoLinkUrls(comment.text)
+                    };
+                }
+            }
+        }
+        return comment; // Returnera oförändrad om inget behöver göras
+    });
+    
+    // Uppdatera row data om några kommentarer processerades
+    const hasChanges = processedComments.some((comment, index) => 
+        comment.text !== rawComments[index]?.text
+    );
+    
+    if (hasChanges) {
+        const rowData = row.getData();
+        rowData[fieldName] = processedComments;
+        row.update({...rowData});
+        
+        // Kalla extern callback för uppdateringar
+        if (this.onCommentUpdate) {
+            this.onCommentUpdate(this.commentType, rowData, fieldName, null, 'auto_link_update');
+        }
+    }
+    
+    const comments = CommentSanitizer.sanitizeComments(processedComments, { allowHtml: this.htmlModeEnabled });
+    
+    this.title.textContent = `Comments for ${CommentSanitizer.escapeHtml(itemName)}`;
+    
+    const commentsContainer = this.createCommentsContainer();
+    
+    if (comments.length > 0) {
+        this.buildCommentsList(comments, commentsContainer);
+        this.timestamp.textContent = `${comments.length} comment${comments.length !== 1 ? 's' : ''}`;
+    } else {
+        commentsContainer.innerHTML = '<p style="color: #888; font-style: italic; text-align: center;">No comments yet</p>';
+        this.timestamp.textContent = 'No comments yet';
+    }
+    
+    this.input.value = '';
+    this.input.disabled = false;
+    this.input.placeholder = 'Add a new comment... (HTML links allowed: <a href="url">text</a>)';
+    this.input.maxLength = 1000;
+    
+    document.getElementById('saveComment').textContent = 'Add Comment';
+    document.getElementById('cancelComment').textContent = 'Close';
+    
+    this.modal.style.display = 'block';
+    setTimeout(() => this.modal.classList.add('active'), 50);
+    this.input.focus();
+}
     
     hide() {
         if (this.modal) {
