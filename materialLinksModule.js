@@ -1,9 +1,65 @@
 // ======= MATERIAL LINKS MODULE =======
-export const MaterialLinksModule = {
-    config: {
-        materialTypes: ["SV-ENR", "Type 2", "Type 5"],
-    },
-    // Generate links for given material number, name, and type
+export class MaterialLinksModule {
+    constructor() {
+        this.config = {
+            materialTypes: ["SV-ENR", "Type 2", "Type 5"],
+            selectors: {
+                modal: 'linksModal',
+                container: 'linksContainer',
+                title: 'modalLinksTitle'
+            }
+        };
+        this.modal = null;
+        this.linksContainer = null;
+        this.title = null;
+    }
+
+    // Global copy function
+    async copyToClipboard(text, fieldName) {
+        if (!text) {
+            this.showMobileToast(`${fieldName} är tomt`);
+            return;
+        }
+        
+        try {
+            await navigator.clipboard.writeText(text);
+            this.showMobileToast(`${fieldName} kopierat! ✓`);
+            this.vibrate();
+        } catch (err) {
+            // Fallback för äldre browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            this.showMobileToast(`${fieldName} kopierat! ✓`);
+            this.vibrate();
+        }
+    }
+
+    vibrate() {
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+    }
+
+    showMobileToast(message) {
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed; 
+            bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(40, 167, 69, 0.9); color: white;
+            padding: 12px 24px; border-radius: 25px;
+            font-size: 16px; z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => document.body.removeChild(toast), 2000);
+    }
+
+    // Generate links based on item type
     generateLinks(materialNumber, materialName, itemType) {
         let links = [];
         const numberAndName = `${materialNumber} ${materialName}`.trim();
@@ -11,7 +67,7 @@ export const MaterialLinksModule = {
         const encodedName = encodeURIComponent(materialName);
         const encodedNumberAndName = encodeURIComponent(numberAndName);
 
-        switch (itemType) {
+        switch(itemType) {
             case "SV-ENR":
                 links = [
                     { name: "Google SV-ENR (Number + Name)", url: `https://www.google.com/search?q=${encodedNumberAndName}&type=sv-enr` },
@@ -41,59 +97,143 @@ export const MaterialLinksModule = {
                 break;
         }
         return links;
-    },
+    }
 
-    // Show modal with material links
-    showLinksModal(materialNumber, materialName, materialType) {
-        if (!materialNumber || !materialType) {
-            alert("Ingen artikeldata tillgänglig.");
+    showLinksModal(materialNumber, materialName, itemType) {
+        if (!materialNumber || !itemType) {
+            alert("No Data Available: The necessary item data is missing.");
             return;
         }
-        // Create modal if not exists
-        let modal = document.getElementById('materialLinksModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'materialLinksModal';
-            modal.className = 'material-links-modal';
-            modal.innerHTML = `
-                <div class="material-links-modal-content">
-                    <h3 id="materialLinksModalTitle"></h3>
-                    <div id="materialLinksContainer"></div>
-                    <button id="closeMaterialLinksModal" style="margin-top:15px;">Stäng</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById('closeMaterialLinksModal').onclick = () => this.hideLinksModal();
-            // Close on outside click
-            modal.onclick = (e) => { if (e.target === modal) this.hideLinksModal(); };
-            // Close on escape
-            document.addEventListener('keydown', (e) => {
-                if (modal.style.display === 'flex' && e.key === 'Escape') this.hideLinksModal();
-            });
+
+        // Säkerställ att modal finns
+        if (!this.modal) {
+            this.createModal();
         }
-        // Set modal content
-        document.getElementById('materialLinksModalTitle').innerHTML = `
-            Sök-länkar för ${materialType}: 
+
+        // Set modal title with integrated copy icons
+        this.title.innerHTML = `
+            Search Links for ${itemType}: 
             ${materialNumber} 
-            <button class="tsk-material-inline-copy-btn" title="Kopiera artikelnummer"
-                onclick="navigator.clipboard && navigator.clipboard.writeText('${materialNumber.replace(/'/g,"\\'") || ""}')">📋</button>
+            <button class="tsk-material-inline-copy-btn" onclick="window.materialLinksModule.copyToClipboard('${materialNumber}', 'Artikelnummer')" title="Kopiera artikelnummer">📋</button>
             - ${materialName || 'No Name'} 
-            <button class="tsk-material-inline-copy-btn" title="Kopiera materialnamn"
-                onclick="navigator.clipboard && navigator.clipboard.writeText('${(materialName||"").replace(/'/g,"\\'")}')">📝</button>
+            <button class="tsk-material-inline-copy-btn" onclick="window.materialLinksModule.copyToClipboard('${materialName || ''}', 'Materialnamn')" title="Kopiera materialnamn">📝</button>
         `;
-        const links = this.generateLinks(materialNumber, materialName, materialType);
-        document.getElementById('materialLinksContainer').innerHTML = links.map(link =>
-            `<div class="tab-modal-link-item"><a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.name}</a></div>`
-        ).join("");
+
+        // Generate and display links
+        const links = this.generateLinks(materialNumber, materialName, itemType);
+        const linksList = links
+            .map(link => `
+                <div class="tab-modal-link-item">
+                    <a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.name}</a>
+                </div>
+            `).join("");
+
+        this.linksContainer.innerHTML = linksList;
+
         // Show modal
-        modal.style.display = 'flex';
-        setTimeout(() => modal.classList.add('active'), 30);
-    },
-    hideLinksModal() {
-        const modal = document.getElementById('materialLinksModal');
-        if (modal) {
-            modal.classList.remove('active');
-            setTimeout(() => { modal.style.display = 'none'; }, 250);
-        }
+        this.modal.style.display = 'flex';
+        setTimeout(() => this.modal.classList.add('active'), 50);
     }
-};
+
+    hideLinksModal() {
+        if (!this.modal) return;
+        
+        this.modal.classList.remove('active');
+        setTimeout(() => {
+            this.modal.style.display = 'none';
+        }, 300);
+    }
+
+    createModal() {
+        // Skapa modal HTML om den inte finns
+        const modalHTML = `
+            <div id="${this.config.selectors.modal}" class="tab-modal">
+                <div class="tab-modal-content">
+                    <div class="tab-modal-header">
+                        <h3 id="${this.config.selectors.title}">Material Links</h3>
+                        <button id="closeLinks" class="tab-modal-close">&times;</button>
+                    </div>
+                    <div id="${this.config.selectors.container}" class="tab-modal-body">
+                        <!-- Links will be populated here -->
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Sätt upp referenser
+        this.modal = document.getElementById(this.config.selectors.modal);
+        this.linksContainer = document.getElementById(this.config.selectors.container);
+        this.title = document.getElementById(this.config.selectors.title);
+
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+        // Handle close button
+        document.getElementById('closeLinks').addEventListener('click', () => {
+            this.hideLinksModal();
+        });
+
+        // Handle click outside
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+                this.hideLinksModal();
+            }
+        });
+
+        // Handle Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modal && this.modal.style.display === 'flex') {
+                this.hideLinksModal();
+            }
+        });
+    }
+
+    // Skapa Material Link kolumn för Tabulator
+    createMaterialLinkColumn() {
+        return {
+            title: "Material Link",
+            field: "tsk_material_link",
+            width: 120,
+            formatter: (cell) => {
+                const rowData = cell.getRow().getData();
+                const itemType = rowData.tsk_material_type;
+                const materialNumber = rowData.tsk_material_number;
+                const materialName = rowData.tsk_material_name;
+                
+                // Only show links if both number and type are present
+                if (!materialNumber || !itemType) {
+                    return '<span class="link-like-text">Show Links (0)</span>';
+                }
+                
+                const links = this.generateLinks(materialNumber, materialName, itemType);
+                const linkCount = links.length;
+                return `<span class="link-like-text">Show Links (${linkCount})</span>`;
+            },
+            cellClick: (e, cell) => {
+                const rowData = cell.getRow().getData();
+                this.showLinksModal(
+                    rowData.tsk_material_number,
+                    rowData.tsk_material_name,
+                    rowData.tsk_material_type
+                );
+            },
+            headerSort: false
+        };
+    }
+
+    // Hämta material types för dropdown
+    getMaterialTypes() {
+        return this.config.materialTypes;
+    }
+
+    // Initialize the module
+    init() {
+        // Gör tillgänglig globalt för onclick events
+        window.materialLinksModule = this;
+    }
+}
+
+export default MaterialLinksModule;
