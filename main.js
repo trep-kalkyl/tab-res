@@ -4,7 +4,7 @@ import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@713f
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
-import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2b8da2a7e9df7ced84b673efeb3563e3330063c7/tagSystemUtils.js";
+import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@fa49bea7af1b591ca2814b63b597cc4ae18d10de/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d1b484df0ded2dab7384a4a60d5b721e3856db99/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
 
@@ -128,7 +128,6 @@ const data = [
     ],
   },
 ];
-
 // ======= GLOBAL STATE =======
 const project = data[0];
 let partTable = null;
