@@ -4,7 +4,14 @@
 const MaterialLinksModule = {
   config: {
     materialTypes: ["SV-ENR", "Type 2", "Type 5"],
-    selectors: { modal: 'linksModal', container: 'linksContainer', title: 'modalLinksTitle' }
+    selectors: { modal: 'linksModal', container: 'linksContainer', title: 'modalLinksTitle' },
+    // Static label per material type for use in formatter
+    linkTextPerType: {
+      "SV-ENR": "Show SV-ENR Links (5)",
+      "Type 2": "Show Type 2 Links (3)",
+      "Type 5": "Show Type 5 Links (7)",
+      "default": "Show Links"
+    }
   },
   modal: null,
   linksContainer: null,
