@@ -376,7 +376,7 @@ const modalHtml = `
       </div>
       <div class="tab-modal-body">
         <div id="commentsContainer" class="comments-container"></div>
-        <textarea id="commentInput" placeholder="Add a comment..." rows="3"></textarea>
+        <textarea id="commentInput" class="tab-modal-textarea" placeholder="Add a comment..." rows="3"></textarea>
         <div class="tab-modal-timestamp" id="commentTimestamp"></div>
       </div>
       <div class="tab-modal-footer tab-modal-buttons">
