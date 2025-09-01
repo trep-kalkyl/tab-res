@@ -4,14 +4,12 @@ import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@713f
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
-import TagSystemUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@c8ec739af0a9f54f49d575e0a97e204fb011cf23/tagSystemUtils.js";
+import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2b8da2a7e9df7ced84b673efeb3563e3330063c7/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d1b484df0ded2dab7384a4a60d5b721e3856db99/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
-import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
 
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
-// ======= EXEMPELDATA (uppdaterad med korrekta task-fältnamn) =======
 const data = [
   {
     prj_id: 1,
@@ -103,7 +101,7 @@ const data = [
             itm_tasks: [
               {
                 tsk_id: 1211,
-                tsk_itm_id: 121,  // <-- KORREKT FÄLT
+                itm_id: 121,
                 tsk_name: "Lay tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.2,
@@ -114,7 +112,7 @@ const data = [
               },
               {
                 tsk_id: 1212,
-                tsk_itm_id: 121,  // <-- KORREKT FÄLT
+                itm_id: 121,
                 tsk_name: "Inspect tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.05,
@@ -295,7 +293,7 @@ const setupTables = async () => {
             rowFormatter: (taskRow) => partColors.applyPartColorToRow(taskRow, partId)
           });
           row._subTaskTable = taskTable;
-          addTagsToTable(taskTable, "task");
+          addTagsToTable(taskTable, "task", project, handleTagUpdate, tableUtils);
           if (commentsModule) {
             commentsModule.registerTable(`taskTable_${itm_id}`, taskTable);
           }
@@ -366,122 +364,6 @@ function waitForTables(selectors, timeoutMs = 8000) {
   });
 }
 
-function addTagsToTable(table, entityType = "item") {
-  const existingColumns = table.getColumns();
-  const tagField =
-    entityType === "part"
-      ? "prt_tags"
-      : entityType === "item"
-      ? "itm_tags"
-      : "tsk_tags";
-  const hasTagColumn = existingColumns.some(col => col.getField() === tagField);
-  if (hasTagColumn) return;
-
-  const tags = new TagSystemUtils();
-
-  const setup = () => {
-    const isItemsTable = table.element && table.element.id === 'item-table';
-    if (isItemsTable) {
-      const originalSetFilter = table.setFilter.bind(table);
-      table.setFilter = function(filters) {
-        if (Array.isArray(filters) && filters.length === 1 && filters[0].field === 'itm_tags') {
-          itemsTagFilter = filters[0].value;
-          applyPartFilter();
-          return;
-        } else if (filters === null || (Array.isArray(filters) && filters.length === 0)) {
-          itemsTagFilter = null;
-          applyPartFilter();
-          return;
-        }
-        originalSetFilter(filters);
-      };
-    }
-
-    const originalGetAllUniqueTags = tags.getAllUniqueTags.bind(tags);
-    tags.getAllUniqueTags = function(data) {
-      const uniqueTags = new Set();
-      data.forEach(row => {
-        if (Array.isArray(row[tagField])) {
-          row[tagField].forEach(tag => uniqueTags.add(tag));
-        }
-      });
-      return Array.from(uniqueTags).sort();
-    };
-
-    tags.tagEditor = function(cell, onRendered, success, cancel, editorParams) {
-      return tags.createTagEditor(
-        cell,
-        onRendered,
-        success,
-        cancel,
-        tagField,
-        entityType,
-        project,
-        handleTagUpdate,
-        tableUtils.findPartById,
-        tableUtils.findItemById,
-        tableUtils.findTaskById
-      );
-    };
-
-    const originalHeaderFilter = tags.customTagHeaderFilter.bind(tags);
-    tags.customTagHeaderFilter = function(headerValue, rowValue, rowData, filterParams) {
-      return originalHeaderFilter(headerValue, rowValue, rowData, filterParams);
-    };
-
-    tags.init(table, { filterLogic: "AND", tagsField: tagField });
-
-    tags.ensureTagsArray(table, entityType);
-
-    const tagCol = tags.getColumnConfig(tagField);
-    const originalEditor = tagCol.editor;
-    tagCol.editor = function(cell, onRendered, success, cancel, editorParams) {
-      const rowData = cell.getRow().getData();
-      const oldTags = Array.isArray(rowData[tagField]) ? [...rowData[tagField]] : [];
-      return tags.createTagEditor(
-        cell,
-        onRendered,
-        newTags => {
-          let entityId, entityTypeStr;
-          if (entityType === "part") {
-            entityId = rowData.prt_id;
-            entityTypeStr = "part";
-            const part = tableUtils.findPartById(project, entityId);
-            if (part) part.prt_tags = newTags || [];
-          } else if (entityType === "item") {
-            entityId = rowData.itm_id;
-            entityTypeStr = "item";
-            const item = tableUtils.findItemById(project, entityId);
-            if (item) item.itm_tags = newTags || [];
-          } else if (entityType === "task") {
-            entityId = rowData.tsk_id;
-            entityTypeStr = "task";
-            const task = tableUtils.findTaskById(project, entityId);
-            if (task) task.tsk_tags = newTags || [];
-          }
-          handleTagUpdate(entityTypeStr, entityId, newTags || [], oldTags);
-          success(newTags);
-        },
-        cancel,
-        tagField,
-        entityType,
-        project
-      );
-    };
-
-    table.addColumn(tagCol).catch(() => {
-      const current = table.getColumnDefinitions();
-      table.setColumns([...current, tagCol]);
-    });
-
-    window.__tagUtils = window.__tagUtils || {};
-    window.__tagUtils[table.element.id || "table"] = tags;
-  };
-
-  if (table.initialized || table._rendered) setup();
-  else table.on("tableBuilt", setup);
-}
-
 // ======= UI INIT =======
 const initUI = async () => {
   partColors.createColorStyles();
@@ -489,8 +371,8 @@ const initUI = async () => {
   await setupTables();
   waitForTables(["#part-table", "#item-table"])
     .then(([partTable, itemTable]) => {
-      addTagsToTable(partTable, "part");
-      addTagsToTable(itemTable, "item");
+      addTagsToTable(partTable, "part", project, handleTagUpdate, tableUtils);
+      addTagsToTable(itemTable, "item", project, handleTagUpdate, tableUtils);
     })
     .catch(err => console.warn("Tagg-init misslyckades:", err));
   const handlers = {
