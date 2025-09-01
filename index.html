@@ -1,0 +1,33 @@
+<!-- TabulatorJS library (required for table functionality) -->
+<script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+
+<!-- TabulatorJS default stylesheet (for table styling) -->
+<link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+
+<!-- TabulatorCalculations helper -->
+<script src="https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@main/TabulatorCalculations.js"></script>
+
+<!-- FontAwesome 6.7.2 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/fontawesome.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/solid.min.css">
+
+<div style="display: flex; gap: 40px;">
+  <div style="min-width: 350px;">
+    <h3>Delar (Parts)</h3>
+    <div id="part-table"></div>
+  </div>
+  <div style="min-width: 800px; flex: 1;">
+    <h3>Poster (Items)</h3>
+    <div id="item-table"></div>
+  </div>
+</div>
+<!-- Links Modal Template -->
+<div class="tab-modal-overlay" id="linksModal" style="display: none;" role="dialog" aria-labelledby="modalLinksTitle" aria-modal="true">
+    <div class="tab-modal-content">
+        <h2 id="modalLinksTitle" class="tab-modal-title">Search Links</h2>
+        <div id="linksContainer" class="tab-modal-links"></div>
+        <div class="tab-modal-buttons">
+            <button id="closeLinks" class="tab-modal-btn tab-modal-cancel" aria-label="Close">Close</button>
+        </div>
+    </div>
+</div>
