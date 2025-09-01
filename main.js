@@ -11,6 +11,7 @@ import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91
 
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
+// ======= EXEMPELDATA (uppdaterad med korrekta task-fältnamn) =======
 const data = [
   {
     prj_id: 1,
@@ -102,7 +103,7 @@ const data = [
             itm_tasks: [
               {
                 tsk_id: 1211,
-                itm_id: 121,
+                tsk_itm_id: 121,  // <-- KORREKT FÄLT
                 tsk_name: "Lay tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.2,
@@ -113,7 +114,7 @@ const data = [
               },
               {
                 tsk_id: 1212,
-                itm_id: 121,
+                tsk_itm_id: 121,  // <-- KORREKT FÄLT
                 tsk_name: "Inspect tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.05,
@@ -129,6 +130,7 @@ const data = [
     ],
   },
 ];
+
 // ======= GLOBAL STATE =======
 const project = data[0];
 let partTable = null;
