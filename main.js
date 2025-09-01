@@ -7,7 +7,7 @@ import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44b
 import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@fa49bea7af1b591ca2814b63b597cc4ae18d10de/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d1b484df0ded2dab7384a4a60d5b721e3856db99/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
-
+import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -101,7 +101,7 @@ const data = [
             itm_tasks: [
               {
                 tsk_id: 1211,
-                itm_id: 121,
+                tsk_itm_id: 121,
                 tsk_name: "Lay tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.2,
@@ -112,7 +112,7 @@ const data = [
               },
               {
                 tsk_id: 1212,
-                itm_id: 121,
+                tsk_itm_id: 121,
                 tsk_name: "Inspect tiles",
                 tsk_total_quantity: 100,
                 tsk_work_task_duration: 0.05,
