@@ -96,12 +96,11 @@ const MaterialLinksModule = {
 
   /**
    * Updates the "Material Links" column cell when underlying values change.
+   * This version forces formatter redraw with row.reformat().
    */
   updateMaterialLinkColumn(row) {
-    const linkCell = row.getCell("tsk_material_link");
-    if (linkCell) {
-      row.update(row.getData());
-    }
+    // Force Tabulator to re-run all formatters for the row (required for dynamic label)
+    row.reformat();
   },
 
   /**
