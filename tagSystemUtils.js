@@ -444,13 +444,26 @@ class TagSystemUtils {
   /**
    * Förbättrad tagg-editor med XSS-skydd (flyttad från main.js)
    */
-  createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
-    // ... (samma som tidigare) ...
-    // --- Trunkerat för att spara plats, se tidigare kod ---
-    // (Innehållet för createTagEditor är oförändrat från tidigare version)
-    // ... 
-    // --- Slut trunkering ---
-  }
+createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 100;
+  input.value = (cell.getValue() || []).join(", ");
+  input.addEventListener("blur", () => {
+    const rawTags = input.value.split(",").map(s => s.trim()).filter(Boolean);
+    const cleanTags = rawTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
+    success(cleanTags);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      input.blur();
+    } else if (e.key === "Escape") {
+      cancel();
+    }
+  });
+  onRendered(() => input.focus());
+  return input;
+}
 
   // Aktivera/inaktivera plaintext-läge (enkel version)
   setPlaintextMode(enabled) {
