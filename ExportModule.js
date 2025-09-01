@@ -1,14 +1,13 @@
 // ExportModule.js
 // Centralized export logic for Tabulator.js tables (part, item, task)
-// Provides: filtering, export modal UI with Prism.js, Tabulator column generators
+// Improved: Robust copy-to-clipboard, consistent modal feedback, ES6 style
 
-// Import Prism.js for syntax highlighting (assume loaded via CDN in index.html)
-import { createFooterButton } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa909f041ec1778ed172a24de1d1d9ddab86921/uiHelpers.js";
+import { createFooterButton } from "./uiHelpers.js";
 
 /**
  * Utility: Sanitize filename for download
  */
-function sanitizeFilename(name) {
+export function sanitizeFilename(name) {
   return (name || "export")
     .replace(/[^a-z0-9_\-]/gi, "_")
     .replace(/_+/g, "_")
@@ -18,7 +17,7 @@ function sanitizeFilename(name) {
 /**
  * Utility: Download JSON as file
  */
-function downloadJSON(data, filename) {
+export function downloadJSON(data, filename) {
   const jsonStr = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonStr], { type: "application/json" });
   const url = window.URL.createObjectURL(blob);
@@ -32,18 +31,39 @@ function downloadJSON(data, filename) {
 }
 
 /**
- * Utility: Copy JSON to clipboard
+ * Utility: Copy JSON to clipboard (robust, with fallback and feedback)
  */
-function copyToClipboard(str) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(str);
+export function copyToClipboard(str) {
+  function showCopyFeedback() {
+    const el = document.querySelector(".tab-modal-btn.tab-modal-confirm");
+    if (el) {
+      el.textContent = "Kopierat!";
+      setTimeout(() => { el.textContent = "Kopiera"; }, 1200);
+    }
+  }
+  // Modern API, only on secure context (localhost or https)
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(str)
+      .then(showCopyFeedback)
+      .catch(() => fallbackCopy(str));
   } else {
-    // fallback
+    fallbackCopy(str);
+  }
+
+  function fallbackCopy(text) {
     const textarea = document.createElement("textarea");
-    textarea.value = str;
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
     document.body.appendChild(textarea);
+    textarea.focus();
     textarea.select();
-    document.execCommand("copy");
+    try {
+      document.execCommand("copy");
+      showCopyFeedback();
+    } catch (err) {
+      alert("Misslyckades att kopiera till urklipp.");
+    }
     document.body.removeChild(textarea);
   }
 }
@@ -53,7 +73,7 @@ function copyToClipboard(str) {
  * - type: "part", "item", or "task"
  * - config: { exclude: [], include: [] }
  */
-function filterExportData(entity, type, config = {}) {
+export function filterExportData(entity, type, config = {}) {
   const exclude = Array.isArray(config.exclude) ? config.exclude : [];
   const include = Array.isArray(config.include) ? config.include : null;
 
@@ -109,7 +129,7 @@ function filterExportData(entity, type, config = {}) {
  * @param {Object} data - JSON data to display
  * @param {string} filename - suggested filename
  */
-function showExportModal(data, filename = "data.json") {
+export function showExportModal(data, filename = "data.json") {
   // Remove any existing modal
   let old = document.getElementById("tab-export-modal");
   if (old) old.remove();
@@ -166,11 +186,7 @@ function showExportModal(data, filename = "data.json") {
   const copyBtn = document.createElement("button");
   copyBtn.className = "tab-modal-btn tab-modal-confirm";
   copyBtn.textContent = "Kopiera";
-  copyBtn.onclick = () => {
-    copyToClipboard(jsonStr);
-    copyBtn.textContent = "Kopierat!";
-    setTimeout(() => (copyBtn.textContent = "Kopiera"), 1200);
-  };
+  copyBtn.onclick = () => copyToClipboard(jsonStr);
   btnRow.appendChild(copyBtn);
 
   // Download button
@@ -209,7 +225,7 @@ function showExportModal(data, filename = "data.json") {
  * Each returns a config for export column (per entity type)
  * - config: { exclude: [...], include: [...] }
  */
-function getPartExportColumn(config = {}) {
+export function getPartExportColumn(config = {}) {
   return {
     title: "Export",
     field: "part_export",
@@ -226,7 +242,7 @@ function getPartExportColumn(config = {}) {
   };
 }
 
-function getItemExportColumn(config = {}) {
+export function getItemExportColumn(config = {}) {
   return {
     title: "Export",
     field: "item_export",
@@ -243,7 +259,7 @@ function getItemExportColumn(config = {}) {
   };
 }
 
-function getTaskExportColumn(config = {}) {
+export function getTaskExportColumn(config = {}) {
   return {
     title: "Export",
     field: "task_export",
@@ -261,21 +277,12 @@ function getTaskExportColumn(config = {}) {
 }
 
 // Export everything for main.js
-export {
-  filterExportData,
-  sanitizeFilename,
-  showExportModal,
-  downloadJSON,
-  getPartExportColumn,
-  getItemExportColumn,
-  getTaskExportColumn,
-};
-
 export default {
   filterExportData,
   sanitizeFilename,
   showExportModal,
   downloadJSON,
+  copyToClipboard,
   getPartExportColumn,
   getItemExportColumn,
   getTaskExportColumn,
