@@ -1,6 +1,9 @@
 /**
- * TagSystemUtils - Slimmad version för Tabulator tagg-hantering
- * MED FÖRBÄTTRAT XSS-SKYDD
+ * TagSystemUtils - Advanced overlay tag editor for Tabulator (v6)
+ * Modular, XSS-safe, AND/OR filter, overlay editor with badge UI.
+ * 
+ * This version is suitable for ES6 module usage and integrates
+ * with external ItemManager, CalculatorService, etc.
  */
 
 class TagSystemUtils {
@@ -11,7 +14,7 @@ class TagSystemUtils {
     this.table = null;
     this.plaintextMode = false;
 
-    // Konfig för AND/OR-toggle i header
+    // Config for AND/OR-toggle in header
     this.toggleConfig = {
       AND: {
         html: '<i class="fa fa-eye"></i> ALLA',
@@ -28,11 +31,6 @@ class TagSystemUtils {
     };
   }
 
-  /**
-   * Initiera mot Tabulator-instans
-   * @param {Tabulator} tabulatorInstance
-   * @param {Object} options
-   */
   init(tabulatorInstance, options = {}) {
     this.table = tabulatorInstance;
     if (options.filterLogic) this.filterLogic = options.filterLogic;
@@ -41,12 +39,9 @@ class TagSystemUtils {
     if (options.plaintextMode !== undefined) this.plaintextMode = options.plaintextMode;
   }
 
-  /**
-   * FÖRBÄTTRAD XSS-säker sanitering för taggar
-   */
+  // XSS-säker sanitering av taggar
   sanitizeTag(text) {
     if (!text || typeof text !== 'string') return '';
-    
     return text
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -54,27 +49,21 @@ class TagSystemUtils {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#x27;")
       .replace(/\//g, "&#x2F;")
-      .replace(/javascript:/gi, "")  // Ta bort javascript: protokoll
-      .replace(/data:/gi, "")        // Ta bort data: protokoll
-      .replace(/vbscript:/gi, "")    // Ta bort vbscript: (IE)
-      .replace(/on\w+=/gi, "")       // Ta bort onevent-attribut
+      .replace(/javascript:/gi, "")
+      .replace(/data:/gi, "")
+      .replace(/vbscript:/gi, "")
+      .replace(/on\w+=/gi, "")
       .trim();
   }
 
-  /**
-   * Bakåtkompatibilitet - använder den säkra sanitize-funktionen
-   */
   cleanPlaintext(text) {
     return this.sanitizeTag(text);
   }
 
-  /**
-   * Formatter: visas som badges (med XSS-skydd)
-   */
+  // Formatter: visar taggar som badges (med XSS-skydd)
   tagFormatter(cell) {
     const tags = cell.getValue() || [];
     if (tags.length === 0) return "";
-    
     return (
       '<div class="tag-cell">' +
       tags.map((tag) => `<span class="tag-badge">${this.sanitizeTag(tag)}</span>`).join("") +
@@ -82,37 +71,31 @@ class TagSystemUtils {
     );
   }
 
-  /**
-   * Editor: enkel med XSS-skydd
-   */
+  // Enkel cell-editor (fallback, används ej om overlay är aktiv)
   tagEditor(cell, onRendered, success, cancel) {
     const input = document.createElement("input");
     input.type = "text";
-    input.maxLength = 100; // Begränsa längd för säkerhet
+    input.maxLength = 100;
     input.value = (cell.getValue() || []).join(", ");
-    
     input.addEventListener("blur", () => {
       const rawTags = input.value.split(",").map(s => s.trim()).filter(Boolean);
       const cleanTags = rawTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
       success(cleanTags);
     });
-    
-    // Extra säkerhet - förhindra paste av skadlig kod
-    input.addEventListener("paste", (e) => {
-      setTimeout(() => {
-        input.value = this.sanitizeTag(input.value);
-      }, 0);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        input.blur();
+      } else if (e.key === "Escape") {
+        cancel();
+      }
     });
-    
     onRendered(() => input.focus());
     return input;
   }
 
-  /**
-   * Hämtar alla unika taggar från data (fältet kan variera!)
-   * main.js patchar denna för rätt fältnamn.
-   */
+  // Unika taggar i datan för rätt fält
   getAllUniqueTags(data) {
+    // Detta patchas av addTagsToTable för rätt tagField
     const tags = new Set();
     data.forEach((row) => {
       if (Array.isArray(row.tags)) {
@@ -125,15 +108,10 @@ class TagSystemUtils {
     return Array.from(tags).sort();
   }
 
-  /**
-   * AND/OR-logik för header filter
-   */
+  // AND/OR-logik för header filter
   customTagHeaderFilter(headerValue, rowValue, rowData, filterParams) {
-    // Om inget filter, visa allt
     if (!headerValue || !Array.isArray(headerValue) || headerValue.length === 0) return true;
-    // Om raden saknar taggar, döljs
     if (!Array.isArray(rowValue) || rowValue.length === 0) return false;
-
     if (this.filterLogic === 'AND') {
       return headerValue.every((selectedTag) => rowValue.includes(selectedTag));
     } else {
@@ -141,9 +119,7 @@ class TagSystemUtils {
     }
   }
 
-  /**
-   * Header filter element med AND/OR-toggle, multi-select badges
-   */
+  // Header filter element med AND/OR-toggle, multi-select badges
   customTagHeaderFilterElement(cell, onRendered, success, cancel, editorParams) {
     const container = document.createElement("div");
     container.className = "custom-tag-header-filter";
@@ -192,7 +168,6 @@ class TagSystemUtils {
     const updateDisplay = () => {
       selectedContainer.innerHTML = "";
       if (selectedTags.length === 0) {
-        // Använd textContent för säkerhet
         selectedContainer.textContent = "Filtrera taggar...";
         clearButton.style.display = "none";
         logicToggle.style.display = "block";
@@ -200,7 +175,6 @@ class TagSystemUtils {
         selectedTags.forEach(tag => {
           const tagBadge = document.createElement("span");
           tagBadge.className = "tag-badge";
-          // Använd textContent istället för innerHTML
           tagBadge.textContent = tag;
           selectedContainer.appendChild(tagBadge);
         });
@@ -216,7 +190,6 @@ class TagSystemUtils {
       allTags.forEach(tag => {
         const option = document.createElement("div");
         option.className = "tag-filter-option";
-        // Använd textContent för säkerhet
         option.textContent = tag;
         if (selectedTags.includes(tag)) option.classList.add("selected");
         option.addEventListener("click", (e) => {
@@ -228,10 +201,8 @@ class TagSystemUtils {
     };
 
     const toggleTag = (tag) => {
-      // Sanitera taggen innan den används
       const cleanTag = this.sanitizeTag(tag);
       if (!cleanTag) return;
-      
       const idx = selectedTags.indexOf(cleanTag);
       if (idx > -1) {
         selectedTags.splice(idx, 1);
@@ -326,14 +297,10 @@ class TagSystemUtils {
     return container;
   }
 
-  // Utilities
   setFilterLogic(logic) { this.filterLogic = logic; }
   getFilterLogic() { return this.filterLogic; }
   getCurrentFilter() { return [...this.currentFilter]; }
 
-  /**
-   * Skapa kolumn-konfiguration (main.js patchar editor etc vid behov)
-   */
   getColumnConfig(fieldName = 'tags') {
     return {
       title: "Taggar",
@@ -348,33 +315,22 @@ class TagSystemUtils {
     };
   }
 
-  // ======= FLYTTADE FUNKTIONER FRÅN MAIN.JS =======
-
-  /**
-   * Säkerställ att alla rader har tags-array
-   */
+  // Säkerställ tags-array finns på alla rader
   ensureTagsArray(table, entityType) {
     const data = table.getData();
-    let dataChanged = false;
-    
-    const tagField = entityType === "part" ? "prt_tags" : 
-                     entityType === "item" ? "itm_tags" : 
+    const tagField = entityType === "part" ? "prt_tags" :
+                     entityType === "item" ? "itm_tags" :
                      "tsk_tags";
-    
     data.forEach(row => {
       if (!Array.isArray(row[tagField])) {
         row[tagField] = [];
-        dataChanged = true;
       }
     });
   }
 
-  /**
-   * Hämta befintliga taggar för parts (med XSS-skydd)
-   */
+  // Hämtar befintliga taggar för varje entitetstyp
   getExistingPartTags(project) {
     const partTags = new Set();
-    
     project.prt_parts?.forEach(part => {
       if (Array.isArray(part.prt_tags)) {
         part.prt_tags.forEach(tag => {
@@ -383,16 +339,10 @@ class TagSystemUtils {
         });
       }
     });
-    
     return Array.from(partTags).sort();
   }
-
-  /**
-   * Hämta befintliga taggar för items (med XSS-skydd)
-   */
   getExistingItemTags(project) {
     const itemTags = new Set();
-    
     project.prt_parts?.forEach(part => {
       part.prt_items?.forEach(item => {
         if (Array.isArray(item.itm_tags)) {
@@ -403,16 +353,10 @@ class TagSystemUtils {
         }
       });
     });
-    
     return Array.from(itemTags).sort();
   }
-
-  /**
-   * Hämta befintliga taggar för tasks (med XSS-skydd)
-   */
   getExistingTaskTags(project) {
     const taskTags = new Set();
-    
     project.prt_parts?.forEach(part => {
       part.prt_items?.forEach(item => {
         item.itm_tasks?.forEach(task => {
@@ -425,13 +369,8 @@ class TagSystemUtils {
         });
       });
     });
-    
     return Array.from(taskTags).sort();
   }
-
-  /**
-   * Hjälpfunktion för att få rätt tagg-funktion baserat på entitetstyp
-   */
   getExistingTagsForEntityType(entityType, project) {
     switch(entityType) {
       case 'part': return this.getExistingPartTags(project);
@@ -442,48 +381,272 @@ class TagSystemUtils {
   }
 
   /**
-   * Förbättrad tagg-editor med XSS-skydd (flyttad från main.js)
+   * Overlay-baserad tagg-editor med XSS-skydd och badge UI
    */
-createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.maxLength = 100;
-  input.value = (cell.getValue() || []).join(", ");
-  input.addEventListener("blur", () => {
-    const rawTags = input.value.split(",").map(s => s.trim()).filter(Boolean);
-    const cleanTags = rawTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
-    success(cleanTags);
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      input.blur();
-    } else if (e.key === "Escape") {
+  createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
+    // Skapa overlay
+    const overlay = document.createElement("div");
+    overlay.className = "tag-editor-overlay";
+    overlay.style = `
+      position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;
+      background:rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;
+    `;
+
+    // Editor-box
+    const editorBox = document.createElement("div");
+    editorBox.className = "tag-editor-box";
+    editorBox.style = `
+      background:white;padding:22px 28px 16px 28px;border-radius:10px;box-shadow:0 8px 40px #3334;
+      min-width:320px;max-width:95vw;max-height:80vh;overflow:auto;position:relative;
+    `;
+
+    // Titel
+    const title = document.createElement("h5");
+    title.className = "tag-editor-title";
+    title.textContent = "Redigera taggar";
+    title.style = "margin-top:0;margin-bottom:12px;text-align:center;";
+    editorBox.appendChild(title);
+
+    // Sanitera befintliga taggar
+    let currentTags = Array.isArray(cell.getValue()) ?
+      cell.getValue().map(tag => this.sanitizeTag(tag)).filter(Boolean) : [];
+    const existingTags = this.getExistingTagsForEntityType(entityType, project);
+
+    // Valda taggar
+    const selectedTagsSection = document.createElement("div");
+    selectedTagsSection.className = "tag-section";
+    const selectedLabel = document.createElement("label");
+    selectedLabel.className = "tag-section-label";
+    selectedLabel.textContent = "Valda taggar:";
+    selectedTagsSection.appendChild(selectedLabel);
+    const tagContainer = document.createElement("div");
+    tagContainer.className = "tag-container";
+    selectedTagsSection.appendChild(tagContainer);
+    editorBox.appendChild(selectedTagsSection);
+
+    // Befintliga taggar
+    const existingTagsSection = document.createElement("div");
+    existingTagsSection.className = "tag-section";
+    const existingLabel = document.createElement("label");
+    existingLabel.className = "tag-section-label";
+    existingLabel.textContent = "Tillgängliga taggar (klicka för att lägga till):";
+    existingTagsSection.appendChild(existingLabel);
+    const existingTagsContainer = document.createElement("div");
+    existingTagsContainer.className = "existing-tags-container";
+    existingTagsSection.appendChild(existingTagsContainer);
+    editorBox.appendChild(existingTagsSection);
+
+    // Ny tagg
+    const newTagSection = document.createElement("div");
+    newTagSection.className = "tag-section";
+    const newLabel = document.createElement("label");
+    newLabel.className = "tag-section-label";
+    newLabel.textContent = "Lägg till ny tagg:";
+    newTagSection.appendChild(newLabel);
+    const inputContainer = document.createElement("div");
+    inputContainer.className = "input-container";
+    const input = document.createElement("input");
+    input.className = "tag-input";
+    input.type = "text";
+    input.maxLength = 50;
+    input.placeholder = "Skriv ny tagg...";
+    inputContainer.appendChild(input);
+    const addButton = document.createElement("button");
+    addButton.className = "btn btn-primary";
+    addButton.textContent = "Lägg till";
+    inputContainer.appendChild(addButton);
+    newTagSection.appendChild(inputContainer);
+    editorBox.appendChild(newTagSection);
+
+    // Knappar
+    const buttonContainer = document.createElement("div");
+    buttonContainer.className = "button-container";
+    buttonContainer.style = "display:flex;justify-content:space-between;margin-top:14px;";
+    const saveButton = document.createElement("button");
+    saveButton.className = "btn btn-success";
+    saveButton.textContent = "Spara";
+    buttonContainer.appendChild(saveButton);
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "btn btn-secondary";
+    cancelButton.textContent = "Avbryt";
+    buttonContainer.appendChild(cancelButton);
+    editorBox.appendChild(buttonContainer);
+
+    // Funktion för att lägga till tagg med XSS-skydd
+    const addTag = (tag) => {
+      const cleanTag = this.sanitizeTag(tag);
+      if (cleanTag && cleanTag.length > 0 && !currentTags.includes(cleanTag)) {
+        currentTags.push(cleanTag);
+        updateTagDisplay();
+      }
+    };
+
+    // Event listeners
+    addButton.addEventListener("click", () => {
+      const cleanTag = this.sanitizeTag(input.value);
+      if (cleanTag) {
+        addTag(cleanTag);
+        input.value = "";
+        input.focus();
+      }
+    });
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        const cleanTag = this.sanitizeTag(input.value);
+        if (cleanTag) {
+          addTag(cleanTag);
+          input.value = "";
+        }
+      }
+    });
+    input.addEventListener("input", (e) => {
+      const cleanValue = this.sanitizeTag(e.target.value);
+      if (e.target.value !== cleanValue) {
+        e.target.value = cleanValue;
+      }
+    });
+    input.addEventListener("paste", (e) => {
+      setTimeout(() => {
+        input.value = this.sanitizeTag(input.value);
+      }, 0);
+    });
+
+    // Funktion för att uppdatera valda taggar
+    const updateTagDisplay = () => {
+      tagContainer.innerHTML = "";
+      if (currentTags.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Inga taggar tillagda";
+        tagContainer.appendChild(emptySpan);
+      } else {
+        currentTags.forEach((tag) => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item selected";
+          tagEl.title = "Klicka för att ta bort";
+          const tagText = document.createElement("span");
+          tagText.textContent = tag;
+          tagEl.appendChild(tagText);
+          const removeBtn = document.createElement("span");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "×";
+          tagEl.appendChild(removeBtn);
+          tagEl.addEventListener("click", () => removeTag(tag));
+          tagContainer.appendChild(tagEl);
+        });
+      }
+      updateExistingTagsDisplay();
+    };
+
+    // Funktion för att uppdatera tillgängliga taggar
+    const updateExistingTagsDisplay = () => {
+      existingTagsContainer.innerHTML = "";
+      const availableNow = existingTags.filter(tag => !currentTags.includes(tag));
+      if (availableNow.length === 0) {
+        const emptySpan = document.createElement("span");
+        emptySpan.className = "empty-state";
+        emptySpan.textContent = "Alla tillgängliga taggar är redan tillagda";
+        existingTagsContainer.appendChild(emptySpan);
+      } else {
+        availableNow.forEach(tag => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag-item available";
+          tagEl.textContent = tag;
+          tagEl.title = "Klicka för att lägga till";
+          tagEl.addEventListener("click", () => addTag(tag));
+          existingTagsContainer.appendChild(tagEl);
+        });
+      }
+    };
+
+    // Ta bort tagg
+    const removeTag = (tag) => {
+      const index = currentTags.indexOf(tag);
+      if (index > -1) {
+        currentTags.splice(index, 1);
+        updateTagDisplay();
+      }
+    };
+
+    // Spara
+    saveButton.addEventListener("click", () => {
+      const sanitizedTags = currentTags.map(tag => this.sanitizeTag(tag)).filter(Boolean);
+      success(sanitizedTags);
+      const rowData = cell.getRow().getData();
+      const oldTags = Array.isArray(rowData[tagField]) ? [...rowData[tagField]] : [];
+      rowData[tagField] = sanitizedTags;
+      cell.getRow().update(rowData);
+      // AJAX-hantering
+      if (handleTagUpdate && findPartById && findItemById && findTaskById) {
+        let entityId, entityTypeStr;
+        if (entityType === "part") {
+          entityId = rowData.prt_id;
+          entityTypeStr = "part";
+          const part = findPartById(project, entityId);
+          if (part) part.prt_tags = sanitizedTags || [];
+        } else if (entityType === "item") {
+          entityId = rowData.itm_id;
+          entityTypeStr = "item";
+          const item = findItemById(project, entityId);
+          if (item) item.itm_tags = sanitizedTags || [];
+        } else if (entityType === "task") {
+          entityId = rowData.tsk_id;
+          entityTypeStr = "task";
+          const task = findTaskById(project, entityId);
+          if (task) task.tsk_tags = sanitizedTags || [];
+        }
+        handleTagUpdate(entityTypeStr, entityId, sanitizedTags || [], oldTags);
+      }
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
+
+    // Avbryt
+    cancelButton.addEventListener("click", () => {
       cancel();
-    }
-  });
-  onRendered(() => input.focus());
-  return input;
-}
+      document.body.removeChild(overlay);
+      document.removeEventListener("keydown", handleEscape);
+    });
 
-  // Aktivera/inaktivera plaintext-läge (enkel version)
-  setPlaintextMode(enabled) {
-    this.plaintextMode = enabled;
+    // Klick utanför
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    });
+
+    // Escape-tangent support
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        cancel();
+        document.body.removeChild(overlay);
+        document.removeEventListener("keydown", handleEscape);
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+
+    overlay.appendChild(editorBox);
+    document.body.appendChild(overlay);
+
+    // Init
+    updateTagDisplay();
+    setTimeout(() => input.focus(), 100);
+    onRendered(() => {});
+    // Return dummy element (krav från Tabulator) - overlay används för interaktion
+    return document.createElement("div");
   }
 
-  getPlaintextMode() {
-    return this.plaintextMode;
-  }
+  setPlaintextMode(enabled) { this.plaintextMode = enabled; }
+  getPlaintextMode() { return this.plaintextMode; }
 }
 
 /**
- * UTFLYTTAD: Lägg till tagg-kolumn till Tabulator-tabell för angiven entitetstyp
- * KAN ERSÄTTA addTagsToTable I main.js
- * 
- * @param {Tabulator} table - Tabulator instance
- * @param {string} entityType - "part" | "item" | "task"
- * @param {Object} project - Current project data object
- * @param {Function} handleTagUpdate - Callback for AJAX tag update
- * @param {Object} tableUtils - Helpers for findPartById, findItemById, findTaskById
+ * Adds a tag column to a Tabulator table for the specified entity type.
+ * - Patches getAllUniqueTags to use correct field
+ * - Patches tagEditor to use overlay editor with all dependencies
+ * - Ensures tags array exists on all rows
  */
 export function addTagsToTable(table, entityType = "item", project, handleTagUpdate, tableUtils) {
   const existingColumns = table.getColumns();
@@ -499,25 +662,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
   const tags = new TagSystemUtils();
 
   const setup = () => {
-    // Patch setFilter for items table (AND/OR with parts)
-    const isItemsTable = table.element && table.element.id === 'item-table';
-    if (isItemsTable) {
-      const originalSetFilter = table.setFilter.bind(table);
-      table.setFilter = function(filters) {
-        if (Array.isArray(filters) && filters.length === 1 && filters[0].field === 'itm_tags') {
-          window.itemsTagFilter = filters[0].value;
-          window.applyPartFilter && window.applyPartFilter();
-          return;
-        } else if (filters === null || (Array.isArray(filters) && filters.length === 0)) {
-          window.itemsTagFilter = null;
-          window.applyPartFilter && window.applyPartFilter();
-          return;
-        }
-        originalSetFilter(filters);
-      };
-    }
-
-    // Patch getAllUniqueTags to use correct tag field
+    // Patch getAllUniqueTags for right tag field
     tags.getAllUniqueTags = function(data) {
       const uniqueTags = new Set();
       data.forEach(row => {
@@ -528,7 +673,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
       return Array.from(uniqueTags).sort();
     };
 
-    // Patch tagEditor to use createTagEditor with all dependencies
+    // Patch tagEditor to use overlay with all dependencies
     tags.tagEditor = function(cell, onRendered, success, cancel, editorParams) {
       return tags.createTagEditor(
         cell,
@@ -580,7 +725,11 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
         cancel,
         tagField,
         entityType,
-        project
+        project,
+        handleTagUpdate,
+        tableUtils.findPartById,
+        tableUtils.findItemById,
+        tableUtils.findTaskById
       );
     };
 
@@ -589,6 +738,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
       table.setColumns([...current, tagCol]);
     });
 
+    // Make tag utils available for filter logic
     window.__tagUtils = window.__tagUtils || {};
     window.__tagUtils[table.element.id || "table"] = tags;
   };
