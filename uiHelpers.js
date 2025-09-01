@@ -10,6 +10,7 @@ export const createFooterButton = (text, onClick) => {
   const footer = document.createElement("div");
   footer.style.textAlign = "right";
   const btn = document.createElement("button");
+  btn.className = "tab-modal-btn tab-modal-confirm"; // Ger konsekvent design
   btn.textContent = text;
   btn.onclick = onClick;
   footer.appendChild(btn);
