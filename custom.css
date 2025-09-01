@@ -1,0 +1,535 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f8f9fa;
+}
+
+        .tag-editor-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .tag-editor-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 500px;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .tag-editor-title {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .tag-section {
+            margin-bottom: 20px;
+        }
+
+        .tag-section-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .tag-container {
+            margin-bottom: 15px;
+            min-height: 40px;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+
+        .existing-tags-container {
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            max-height: 120px;
+            overflow-y: auto;
+            background: white;
+        }
+
+        .tag-item {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            user-select: none;
+        }
+
+        .tag-item.selected {
+            background: #28a745;
+            color: white;
+        }
+
+        .tag-item.available {
+            background: #007bff;
+            color: white;
+        }
+
+        .tag-item.available:hover {
+            background: #0056b3;
+        }
+
+        .tag-item .remove-btn {
+            margin-left: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .empty-state {
+            color: #999;
+            font-style: italic;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tag-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+.container {
+  display: flex;
+  height: 100vh;
+}
+.sidebar {
+  width: 250px;
+  background: #fff;
+  border-right: 1px solid #ddd;
+  padding: 1em;
+  overflow-y: auto;
+}
+.sidebar h2 {
+  margin-top: 0;
+  font-size: 1.2em;
+  margin-bottom: 0.7em;
+}
+.sidebar label {
+  display: block;
+  margin-bottom: 0.5em;
+  cursor: pointer;
+  user-select: none;
+}
+.main-content {
+  flex: 1;
+  padding: 1.5em;
+  overflow: auto;
+}
+#item-table {
+  margin: 0 auto;
+  min-width: 700px;
+  min-height: 90%;
+  background: #fff;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 8px #0001;
+}
+.no-selection {
+  color: #888;
+  text-align: center;
+  margin-top: 3em;
+  font-size: 1.1em;
+}
+
+/* ========== TagSystem (tillägg) ========== */
+.tag-cell { display:flex; flex-wrap:wrap; gap:6px; }
+.tag-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1f2937; font-size:12px; border:1px solid #c7d2fe; }
+.tag-editor-container { padding:8px; background:#fff; }
+.tag-display-container { display:flex; flex-wrap:wrap; gap:6px; min-height:32px; }
+.tag-suggestions-dropdown { border-radius:6px; }
+.remove-tag-btn { transform:scale(.8); }
+.custom-tag-header-filter { width:100%; }
+.tag-filter-button { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:4px 8px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; }
+.tag-filter-selected { display:flex; flex-wrap:wrap; gap:6px; flex:1; }
+.tag-filter-placeholder { color:#9ca3af; font-size:12px; }
+.tag-filter-clear { background:#ef4444; color:#fff; border:none; border-radius:4px; padding:0 6px; height:22px; display:none; }
+.tag-filter-arrow { width:10px; height:10px; border-right:2px solid #9ca3af; border-bottom:2px solid #9ca3af; transform:rotate(45deg); margin-left:4px; transition:transform .15s ease; }
+.tag-filter-arrow.open { transform:rotate(225deg); }
+.dropdown-overlay { position:fixed; inset:0; background:transparent; z-index:99998; }
+.tag-filter-dropdown-fixed { position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,.08); padding:8px; max-height:260px; overflow:auto; z-index:99999; }
+.tag-filter-option { padding:8px 10px; border-radius:6px; cursor:pointer; }
+.tag-filter-option:hover { background:#f3f4f6; }
+.tag-filter-option.selected { background:#e0e7ff; border:1px solid #c7d2fe; }
+
+/* Modal overlay with centering */
+.tab-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.tab-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Modal content with centered positioning */
+.tab-modal-content {
+    background-color: white;
+    padding: 24px;
+    border-radius: 8px;
+    max-width: 90%;
+    width: 500px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+    margin: auto; /* Ensures horizontal centering */
+    position: relative; /* Helps with stacking context */
+}
+
+.tab-modal-overlay.active .tab-modal-content {
+    transform: translateY(0);
+}
+
+/* Comment-specific styles */
+.tab-modal-timestamp {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 16px;
+}
+
+.tab-modal-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+    margin-bottom: 16px;
+}
+
+.tab-modal-textarea:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Button container with consistent spacing */
+.tab-modal-buttons {
+    display: flex;
+    justify-content: center; /* Changed to center to match delete modal */
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.tab-modal-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.tab-modal-btn:hover {
+    transform: translateY(-1px);
+}
+
+.tab-modal-btn:active {
+    transform: translateY(0);
+}
+
+.tab-modal-confirm {
+    background-color: #4a90e2;
+    color: white;
+}
+
+.tab-modal-confirm:hover {
+    background-color: #357abd;
+}
+
+.tab-modal-cancel {
+    background-color: #6c757d;
+    color: white;
+}
+
+.tab-modal-cancel:hover {
+    background-color: #5a6268;
+}
+
+/* Title styling */
+.tab-modal-title {
+    margin: 0 0 16px 0;
+    font-size: 1.5rem;
+    color: #2c3e50;
+    text-align: center; /* Center title to match delete modal */
+}
+
+/* Responsive styles */
+@media (max-width: 480px) {
+    .tab-modal-content {
+        width: 85%;
+        padding: 20px;
+        margin: 20px;
+    }
+    
+    .tab-modal-buttons {
+        flex-direction: column;
+    }
+    
+    .tab-modal-btn {
+        width: 100%;
+        margin: 5px 0;
+    }
+}
+
+.tsk-material-inline-copy-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: 0 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    min-height: 32px;
+    min-width: 32px;
+}
+
+.tsk-material-inline-copy-btn:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+.tsk-material-inline-copy-btn:active {
+    background: rgba(0, 123, 255, 0.2);
+    transform: scale(0.95);
+}
+
+.tab-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.tab-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.tab-modal-content {
+    background-color: white;
+    padding: 24px;
+    border-radius: 8px;
+    max-width: 90%;
+    width: 500px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.tab-modal-overlay.active .tab-modal-content {
+    transform: translateY(0);
+}
+
+/* Links-specific styles */
+.tab-modal-links {
+    margin: 20px 0;
+}
+
+.tab-modal-link-item {
+    margin: 12px 0;
+    text-align: center;
+}
+
+.tab-modal-link-item a {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    color: #4a90e2;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.tab-modal-link-item a:hover {
+    background-color: #e9ecef;
+    transform: translateY(-1px);
+}
+
+.link-like-text {
+    color: #4a90e2;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.tsk-material-inline-copy-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: 0 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    min-height: 32px;
+    min-width: 32px;
+}
+
+.tsk-material-inline-copy-btn:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+.tsk-material-inline-copy-btn:active {
+    background: rgba(0, 123, 255, 0.2);
+    transform: scale(0.95);
+}
+
+.tab-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.tab-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.tab-modal-content {
+    background-color: white;
+    padding: 24px;
+    border-radius: 8px;
+    max-width: 90%;
+    width: 500px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.tab-modal-overlay.active .tab-modal-content {
+    transform: translateY(0);
+}
+
+/* Links-specific styles */
+.tab-modal-links {
+    margin: 20px 0;
+}
+
+.tab-modal-link-item {
+    margin: 12px 0;
+    text-align: center;
+}
+
+.tab-modal-link-item a {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    color: #4a90e2;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.tab-modal-link-item a:hover {
+    background-color: #e9ecef;
+    transform: translateY(-1px);
+}
+
+.link-like-text {
+    color: #4a90e2;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* Button styles */
+.tab-modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.tab-modal-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.tab-modal-btn:hover {
+    transform: translateY(-1px);
+}
+
+.tab-modal-cancel {
+    background-color: #6c757d;
+    color: white;
+}
+
+.tab-modal-cancel:hover {
+    background-color: #5a6268;
+}
+
+/* Title styling */
+.tab-modal-title {
+    margin: 0 0 16px 0;
+    font-size: 1.5rem;
+    color: #2c3e50;
+    text-align: center;
+}
+
+/* Responsive styles */
+@media (max-width: 480px) {
+    .tab-modal-content {
+        width: 85%;
+        padding: 20px;
+    }
+}
