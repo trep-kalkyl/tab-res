@@ -5,9 +5,10 @@ import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
 import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2465e492205567c222f7d0b4c9a5f7cfe0f306c1/tagSystemUtils.js";
-import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@93cf2ce61ecce69e27877ee149a3e06d5ad0dc41/commentSystem.js";
+import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@edd60d1c42de34265b64f48c77a4b577404e05fa/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
 import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
+import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7c094df4b07b56d1d6d300b4ffd77afd4dfdf035/materialLinks.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -231,11 +232,91 @@ const getItemTableColumns = () => [
   ...(commentsModule ? [commentsModule.createCommentColumn('item', 'itm_name', { width: 200, title: "Item Comments" })] : [])
 ];
 
+// ======= TASK-TABLE KOLUMNER: ALLA tsk_-kolumner samlade =======
 const getTaskTableColumns = () => [
   deleteColumn((e, cell) => ItemManager.handleDeleteTask(project, cell.getRow().getData(), itemTable, subtableToggle.openItemRows)),
   { title: "Task-ID", field: "tsk_id", width: 70 },
   { title: "Task-namn", field: "tsk_name", editor: "input", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Quantity", field: "tsk_total_quantity", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
+
+  // ===== MATERIAL-LÄNK-KOLUMNER (AJAX-kopplade) =====
+  {
+    title: "Material Number",
+    field: "tsk_material_number",
+    editor: "input",
+    cellEdited: function(cell) {
+      // Uppdatera länk-kolumnens label
+      MaterialLinksModule.updateMaterialLinkColumn(cell.getRow());
+      // AJAX
+      const rowData = cell.getRow().getData();
+      ajaxHandler.queuedEchoAjax({
+        tsk_id: rowData.tsk_id,
+        field: "tsk_material_number",
+        value: rowData.tsk_material_number,
+        action: "updateTaskMaterialField"
+      });
+    }
+  },
+  {
+    title: "Material Name",
+    field: "tsk_material_name",
+    editor: "input",
+    cellEdited: function(cell) {
+      MaterialLinksModule.updateMaterialLinkColumn(cell.getRow());
+      const rowData = cell.getRow().getData();
+      ajaxHandler.queuedEchoAjax({
+        tsk_id: rowData.tsk_id,
+        field: "tsk_material_name",
+        value: rowData.tsk_material_name,
+        action: "updateTaskMaterialField"
+      });
+    }
+  },
+  {
+    title: "Material Type",
+    field: "tsk_material_type",
+    editor: "list",
+    editorParams: { values: MaterialLinksModule.config.materialTypes },
+    cellEdited: function(cell) {
+      MaterialLinksModule.updateMaterialLinkColumn(cell.getRow());
+      const rowData = cell.getRow().getData();
+      ajaxHandler.queuedEchoAjax({
+        tsk_id: rowData.tsk_id,
+        field: "tsk_material_type",
+        value: rowData.tsk_material_type,
+        action: "updateTaskMaterialField"
+      });
+    }
+  },
+  {
+    title: "Material Links",
+    field: "tsk_material_link",
+    formatter: function(cell) {
+      const rowData = cell.getRow().getData();
+      const itemType = rowData.tsk_material_type;
+      const materialNumber = rowData.tsk_material_number;
+      const materialName = rowData.tsk_material_name;
+      if (!materialNumber && !materialName) {
+        return '<span class="link-like-text">Show Links (0)</span>';
+      }
+      const links = MaterialLinksModule.linksModalUtils.generateLinks(materialNumber, materialName, itemType);
+      const linkCount = links.length;
+      return `<span class="link-like-text">Show Links (${linkCount})</span>`;
+    },
+    cellClick: function(e, cell) {
+      const rowData = cell.getRow().getData();
+      MaterialLinksModule.linksModalUtils.show(
+        rowData.tsk_material_number,
+        rowData.tsk_material_name,
+        rowData.tsk_material_type,
+        MaterialLinksModule
+      );
+    },
+    width: 120,
+    hozAlign: "center"
+  },
+  // ===== SLUT MATERIAL-LÄNK-KOLUMNER =====
+
   { title: "Material Amount", field: "tsk_material_amount", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Material Price", field: "tsk_material_user_price", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
@@ -249,6 +330,8 @@ const setupTables = async () => {
   if (!commentsModule) {
     commentsModule = await initCommentsModule();
   }
+
+  MaterialLinksModule.init();
 
   partTable = new Tabulator("#part-table", {
     index: "prt_id",
