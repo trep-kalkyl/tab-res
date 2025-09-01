@@ -318,6 +318,78 @@ const getTaskTableColumns = () => [
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: tableUtils.formatHours },
+  { 
+  title: "Work Task Code",
+  field: "tsk_work_task_code",
+  editor: "input",
+  cellEdited: function(cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_work_task_code",
+      value: rowData.tsk_work_task_code,
+      action: "updateTaskField"
+    });
+  }
+},
+{ 
+  title: "Work Task Code Type",
+  field: "tsk_work_task_code_type",
+  editor: "input", // Eller "list" om ni har fasta typer
+  cellEdited: function(cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_work_task_code_type",
+      value: rowData.tsk_work_task_code_type,
+      action: "updateTaskField"
+    });
+  }
+},
+{ 
+  title: "Work Task Description",
+  field: "tsk_work_task_description",
+  editor: "input",
+  cellEdited: function(cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_work_task_description",
+      value: rowData.tsk_work_task_description,
+      action: "updateTaskField"
+    });
+  }
+},
+{ 
+  title: "Material Unit",
+  field: "tsk_material_unit",
+  editor: "list",
+  editorParams: { values: ["m", "l", "st", "kg"] },
+  cellEdited: function(cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_material_unit",
+      value: rowData.tsk_material_unit,
+      action: "updateTaskField"
+    });
+  }
+},
+{ 
+  title: "Material Price Currency",
+  field: "tsk_material_currency",
+  editor: "list",
+  editorParams: { values: ["SEK", "EUR", "USD"] },
+  cellEdited: function(cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_material_currency",
+      value: rowData.tsk_material_currency,
+      action: "updateTaskField"
+    });
+  }
+},
   ...(commentsModule ? [commentsModule.createCommentColumn('task', 'tsk_name', { width: 200, title: "Task Comments" })] : [])
 ];
 
