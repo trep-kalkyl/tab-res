@@ -9,6 +9,7 @@ import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
 import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
 import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
+import { mathExpressionEditor } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2cbad2a1e5793822760906fc1b44c489b3b03b20/mathExpressionEditor.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -224,7 +225,7 @@ const getItemTableColumns = () => [
     formatter: cell => calcUtils.getPartLookup(project)[cell.getValue()] || "Okänd part",
     cellEdited: (cell) => ItemManager.moveItemPartCell(project, cell, partTable, itemTable, partColors, applyPartFilter)
   },
-  { title: "Antal", field: "itm_quantity", editor: "number", cellEdited: (cell) => ItemManager.updateItemCell(project, cell, itemTable, partTable) },
+  { title: "Antal", field: "itm_quantity", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateItemCell(project, cell, itemTable, partTable) },
   { title: "Materialpris", field: "itm_material_user_price", ...tableUtils.formatMoney },
   { title: "Materialpris Tot", field: "itm_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Arbetstid", field: "itm_work_task_duration", formatter: tableUtils.formatHours },
@@ -237,7 +238,7 @@ const getTaskTableColumns = () => [
   deleteColumn((e, cell) => ItemManager.handleDeleteTask(project, cell.getRow().getData(), itemTable, subtableToggle.openItemRows)),
   { title: "Task-ID", field: "tsk_id", width: 70 },
   { title: "Task-namn", field: "tsk_name", editor: "input", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
-  { title: "Quantity", field: "tsk_total_quantity", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
+  { title: "Quantity", field: "tsk_total_quantity", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
 
   // ===== MATERIAL-LÄNK-KOLUMNER (AJAX-kopplade) =====
   {
@@ -312,8 +313,8 @@ const getTaskTableColumns = () => [
 
   // ===== SLUT MATERIAL-LÄNK-KOLUMNER =====
 
-  { title: "Material Amount", field: "tsk_material_amount", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
-  { title: "Material Price", field: "tsk_material_user_price", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
+  { title: "Material Amount", field: "tsk_material_amount", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
+  { title: "Material Price", field: "tsk_material_user_price", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: tableUtils.formatHours },
