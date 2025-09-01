@@ -6,6 +6,7 @@ import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ed
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
 import TagSystemUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@c8ec739af0a9f54f49d575e0a97e204fb011cf23/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d1b484df0ded2dab7384a4a60d5b721e3856db99/commentSystem.js";
+import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; // NY! Alla hjälpfunktioner
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -193,37 +194,6 @@ const initCommentsModule = async () => {
   }
 };
 
-// ======= HJÄLPFUNKTIONER =======
-const findItemById = (proj, itm_id) => {
-  for (const part of proj.prt_parts || []) {
-    const found = (part.prt_items || []).find(i => i.itm_id === itm_id);
-    if (found) return found;
-  }
-  return null;
-};
-
-const findTaskById = (proj, tsk_id) => {
-  for (const part of proj.prt_parts || []) {
-    for (const item of part.prt_items || []) {
-      const found = (item.itm_tasks || []).find(t => t.tsk_id === tsk_id);
-      if (found) return found;
-    }
-  }
-  return null;
-};
-
-const findPartById = (proj, prt_id) => {
-  return (proj.prt_parts || []).find(p => p.prt_id === prt_id);
-};
-
-const getNextId = (collection, idField) => (collection.length ? Math.max(...collection.map(i => +i[idField] || 0)) + 1 : 1);
-const getNextPartId = () => getNextId(project.prt_parts || [], "prt_id");
-const getNextItemId = () => getNextId(project.prt_parts?.flatMap(p => p.prt_items || []) || [], "itm_id");
-const getNextTaskId = () => getNextId(project.prt_parts?.flatMap(p => (p.prt_items || []).flatMap(i => i.itm_tasks || [])) || [], "tsk_id");
-const formatMoney = { formatter: "money", formatterParams: { symbol: "kr", precision: 2, thousand: " " } };
-const formatHours = cell => `${(Number(cell.getValue()) || 0).toFixed(2)} h`;
-const confirmMsg = msg => window.confirm(msg);
-
 // ======= TAGG-AJAX FUNKTIONER =======
 const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
   // Skicka AJAX-anrop för tagguppdatering
@@ -248,8 +218,8 @@ const getPartTableColumns = () => [
   { title: "Markerad", field: "selected", formatter: "tickCross", editor: true, headerSort: false, width: 80, cellEdited: () => applyPartFilter() },
   { title: "Part-ID", field: "prt_id", width: 80 },
   { title: "Part-namn", field: "prt_name", formatter: "plaintext", editor: "input", cellEdited: updatePartName },
-  { title: "Materialpris Tot", field: "prt_material_user_price_total", ...formatMoney },
-  { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: formatHours },
+  { title: "Materialpris Tot", field: "prt_material_user_price_total", ...tableUtils.formatMoney },
+  { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: tableUtils.formatHours },
   // Lägg till kommentarskolumn för parts
   ...(commentsModule ? [commentsModule.createCommentColumn('part', 'prt_name', { width: 200, title: "Part Comments" })] : [])
 ];
@@ -275,10 +245,10 @@ const getItemTableColumns = () => [
     cellEdited: moveItemPartCell
   },
   { title: "Antal", field: "itm_quantity", editor: "number", cellEdited: updateItemCell },
-  { title: "Materialpris", field: "itm_material_user_price", ...formatMoney },
-  { title: "Materialpris Tot", field: "itm_material_user_price_total", ...formatMoney },
-  { title: "Arbetstid", field: "itm_work_task_duration", formatter: formatHours },
-  { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: formatHours },
+  { title: "Materialpris", field: "itm_material_user_price", ...tableUtils.formatMoney },
+  { title: "Materialpris Tot", field: "itm_material_user_price_total", ...tableUtils.formatMoney },
+  { title: "Arbetstid", field: "itm_work_task_duration", formatter: tableUtils.formatHours },
+  { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: tableUtils.formatHours },
   // Lägg till kommentarskolumn för items
   ...(commentsModule ? [commentsModule.createCommentColumn('item', 'itm_name', { width: 200, title: "Item Comments" })] : [])
 ];
@@ -290,9 +260,9 @@ const getTaskTableColumns = () => [
   { title: "Quantity", field: "tsk_total_quantity", editor: "number", cellEdited: updateTaskCell },
   { title: "Material Amount", field: "tsk_material_amount", editor: "number", cellEdited: updateTaskCell },
   { title: "Material Price", field: "tsk_material_user_price", editor: "number", cellEdited: updateTaskCell },
-  { title: "Material Price Total", field: "tsk_material_user_price_total", ...formatMoney },
+  { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: updateTaskCell },
-  { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: formatHours },
+  { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: tableUtils.formatHours },
   // Lägg till kommentarskolumn för tasks
   ...(commentsModule ? [commentsModule.createCommentColumn('task', 'tsk_name', { width: 200, title: "Task Comments" })] : [])
 ];
@@ -300,7 +270,7 @@ const getTaskTableColumns = () => [
 // ======= DELETE HANDLERS =======
 const handleDeletePart = (_e, cell) => {
   const { prt_id, prt_name } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort part "${prt_name}" och allt underliggande?`)) return;
+  if (!tableUtils.confirmMsg(`Vill du verkligen ta bort part "${prt_name}" och allt underliggande?`)) return;
   project.prt_parts = (project.prt_parts || []).filter(p => p.prt_id !== prt_id);
   partTable?.deleteRow(prt_id);
   (itemTable?.getData() || []).filter(i => i.itm_prt_id === prt_id).forEach(i => itemTable.deleteRow(i.itm_id));
@@ -310,7 +280,7 @@ const handleDeletePart = (_e, cell) => {
 
 const handleDeleteItem = (_e, cell) => {
   const { itm_id, itm_name, itm_prt_id } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort item "${itm_name}" och dess tasks?`)) return;
+  if (!tableUtils.confirmMsg(`Vill du verkligen ta bort item "${itm_name}" och dess tasks?`)) return;
   const part = project.prt_parts?.find(p => p.prt_id === itm_prt_id); if (!part) return;
   part.prt_items = (part.prt_items || []).filter(i => i.itm_id !== itm_id);
   itemTable?.deleteRow(itm_id);
@@ -321,8 +291,8 @@ const handleDeleteItem = (_e, cell) => {
 
 const handleDeleteTask = (cell, itm_id) => {
   const { tsk_id, tsk_name } = cell.getRow().getData();
-  if (!confirmMsg(`Vill du verkligen ta bort task "${tsk_name}"?`)) return;
-  const item = findItemById(project, itm_id); if (!item) return;
+  if (!tableUtils.confirmMsg(`Vill du verkligen ta bort task "${tsk_name}"?`)) return;
+  const item = tableUtils.findItemById(project, itm_id); if (!item) return;
   item.itm_tasks = (item.itm_tasks || []).filter(t => t.tsk_id !== tsk_id);
   const itemRow = itemTable.getRow(itm_id); itemRow?._subTaskTable?.deleteRow(tsk_id);
   calcUtils.updateAllData(project); updateDataAndRefresh(item);
@@ -383,16 +353,16 @@ const setupTables = async () => {
 
 // ======= LÄGG TILL-RADER =======
 const addPartRow = () => {
-  const newId = getNextPartId(), newPart = { prt_id: newId, prt_prj_id: project.prj_id, prt_name: `Ny Part ${newId}`, prt_items: [], selected: true, prt_tags: [], prt_comments: [] };
+  const newId = tableUtils.getNextPartId(project), newPart = { prt_id: newId, prt_prj_id: project.prj_id, prt_name: `Ny Part ${newId}`, prt_items: [], selected: true, prt_tags: [], prt_comments: [] };
   (project.prt_parts ||= []).push(newPart); calcUtils.updateAllData(project); partTable.addRow(newPart); updatePartOptions(); applyPartFilter();
   ajaxHandler.queuedEchoAjax({ prt_id: newId, prt_name: newPart.prt_name, action: "addPart" });
   setTimeout(() => partTable.getRow(newId)?.getCell("prt_name").edit(), 0);
 };
 
 const addItemRow = () => {
-  const newId = getNextItemId(), targetPart = project.prt_parts?.find(p => p.selected) || project.prt_parts?.[0];
+  const newId = tableUtils.getNextItemId(project), targetPart = project.prt_parts?.find(p => p.selected) || project.prt_parts?.[0];
   if (!targetPart) return ajaxHandler.showUserError("Skapa först en Part.");
-  const newTaskId = getNextTaskId(), newTask = { tsk_id: newTaskId, tsk_itm_id: newId, tsk_name: `Ny Task ${newTaskId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [], tsk_comments: [] };
+  const newTaskId = tableUtils.getNextTaskId(project), newTask = { tsk_id: newTaskId, tsk_itm_id: newId, tsk_name: `Ny Task ${newTaskId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [], tsk_comments: [] };
   const newItem = { itm_id: newId, itm_prt_id: targetPart.prt_id, itm_name: `Ny Item ${newId}`, itm_category: "", itm_quantity: 1, itm_tasks: [newTask], itm_tags: [], itm_comments: [] };
   (targetPart.prt_items ||= []).push(newItem); calcUtils.updateAllData(project); itemTable.addRow(newItem); subtableToggle.openItemRows.add(newId);
   ajaxHandler.queuedEchoAjax({ itm_id: newId, itm_name: newItem.itm_name, action: "addItem" });
@@ -401,8 +371,8 @@ const addItemRow = () => {
 };
 
 const addTaskRow = (itemData) => {
-  const newId = getNextTaskId(), newTask = { tsk_id: newId, tsk_itm_id: itemData.itm_id, tsk_name: `Ny Task ${newId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [], tsk_comments: [] };
-  const item = findItemById(project, itemData.itm_id); if (!item) return;
+  const newId = tableUtils.getNextTaskId(project), newTask = { tsk_id: newId, tsk_itm_id: itemData.itm_id, tsk_name: `Ny Task ${newId}`, tsk_total_quantity: 1, tsk_work_task_duration: 0, tsk_material_amount: 0, tsk_material_user_price: 0, tsk_tags: [], tsk_comments: [] };
+  const item = tableUtils.findItemById(project, itemData.itm_id); if (!item) return;
   (item.itm_tasks ||= []).push(newTask); calcUtils.updateAllData(project);
   const itemRow = itemTable.getRow(itemData.itm_id); if (!itemRow) return;
   if (itemRow._subTaskTable) {
@@ -592,7 +562,7 @@ function addTagsToTable(table, entityType = "item") {
 
     // Använd TagSystemUtils' tagg-editor och patcha för AJAX
     tags.tagEditor = function(cell, onRendered, success, cancel, editorParams) {
-      return tags.createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById);
+      return tags.createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, tableUtils.findPartById, tableUtils.findItemById, tableUtils.findTaskById);
     };
 
     // Patch customTagHeaderFilter för rätt fältnamn
@@ -622,7 +592,7 @@ function addTagsToTable(table, entityType = "item") {
           entityId = rowData.prt_id;
           entityTypeStr = "part";
           // Uppdatera part i project data
-          const part = findPartById(project, entityId);
+          const part = tableUtils.findPartById(project, entityId);
           if (part) {
             part.prt_tags = newTags || [];
           }
@@ -630,7 +600,7 @@ function addTagsToTable(table, entityType = "item") {
           entityId = rowData.itm_id;
           entityTypeStr = "item";
           // Uppdatera item i project data
-          const item = findItemById(project, entityId);
+          const item = tableUtils.findItemById(project, entityId);
           if (item) {
             item.itm_tags = newTags || [];
           }
@@ -638,7 +608,7 @@ function addTagsToTable(table, entityType = "item") {
           entityId = rowData.tsk_id;
           entityTypeStr = "task";
           // Uppdatera task i project data
-          const task = findTaskById(project, entityId);
+          const task = tableUtils.findTaskById(project, entityId);
           if (task) {
             task.tsk_tags = newTags || [];
           }
