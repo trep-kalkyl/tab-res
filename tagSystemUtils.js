@@ -386,19 +386,14 @@ class TagSystemUtils {
   createTagEditor(cell, onRendered, success, cancel, tagField, entityType, project, handleTagUpdate, findPartById, findItemById, findTaskById) {
     // Skapa overlay
     const overlay = document.createElement("div");
-    overlay.className = "tag-editor-overlay";
-    overlay.style = `
-      position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;
-      background:rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;
-    `;
+ overlay.className = "tab-modal-overlay active";
+overlay.setAttribute("role", "dialog");
+overlay.setAttribute("aria-modal", "true");
+
 
     // Editor-box
     const editorBox = document.createElement("div");
-    editorBox.className = "tag-editor-box";
-    editorBox.style = `
-      background:white;padding:22px 28px 16px 28px;border-radius:10px;box-shadow:0 8px 40px #3334;
-      min-width:320px;max-width:95vw;max-height:80vh;overflow:auto;position:relative;
-    `;
+    editorBox.className = "tab-modal-content tag-editor-box";
 
     // Titel
     const title = document.createElement("h5");
