@@ -346,3 +346,21 @@ body {
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* =======================
+   Export Modal: Code Block Scroll
+   ======================= */
+.tab-modal-content pre {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f5f5fa;
+  font-size: 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px #0001;
+}
+.tab-modal-content code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
