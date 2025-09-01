@@ -1,702 +1,254 @@
+// ItemManager.js - Handles add, delete, and update logic for Parts, Items, and Tasks in Tabulator project structure
+
+import * as calcUtils from "./projectCalcUtils.js";
+import * as ajaxHandler from "./ajaxHandler.js";
+
 /**
- * ItemManager.js
- * 
- * Ansvarar för hantering av items och tasks, inklusive skapande, uppdatering och borttagning.
- * Fungerar tillsammans med CalculatorService för beräkningar.
+ * Utility: Confirm dialog
  */
-
-class ItemManager {
-  constructor(dataSource, calculatorService) {
-    this.data = dataSource;
-    this.calculatorService = calculatorService;
-    this.allCategories = new Set();
-    this.newCategoryCounter = 1;
-    
-    // Initiera kategoriset från den ursprungliga datan
-    this.refreshCategorySet();
-  }
-
-  // Uppdatera allCategories set baserat på aktuell data
-  refreshCategorySet() {
-    this.allCategories = new Set(this.data.map((item) => item.item_category));
-  }
-
-  // Skapa en knapp för att ta bort kategorier
-// Skapa en knapp för att ta bort kategorier
-createDeleteButton(cell, updateFilterCallback) {
-  const button = document.createElement("button");
-  button.innerHTML = "✖";
-  button.style.cursor = "pointer";
-  button.style.background = "none";
-  button.style.border = "none";
-  button.style.color = "#ff4444";
-  button.style.fontSize = "16px";
-
-  button.addEventListener("click", () => {
-    try {
-      // Hämta row-referensen direkt från cell
-      const row = cell.getRow();
-      if (!row) {
-        console.error("Row reference is invalid");
-        return;
-      }
-      
-      // Hämta data INNAN vi gör några ändringar
-      const rowData = row.getData();
-      if (!rowData) {
-        console.error("Unable to get row data");
-        return;
-      }
-      
-      const category = rowData.menu_category;
-      console.log("Attempting to delete category:", category);
-
-      // Hämta tabellreferenser
-      const menuTable = Tabulator.findTable("#menu-table")[0];
-      if (!menuTable) {
-        console.error("Menu table reference is invalid");
-        return;
-      }
-      
-      const dataTable = Tabulator.findTable("#data-table")[0];
-      if (!dataTable) {
-        console.error("Data table reference is invalid");
-        return;
-      }
-
-      // Förhindra radering om det är den sista kategorin
-      if (menuTable.getData().length <= 1) {
-        alert("At least one category must remain.");
-        return;
-      }
-
-      // Visa en bekräftelsedialog
-      const confirmDelete = confirm(
-        `Are you sure you want to delete the category "${category}" and all its items?`
-      );
-
-      if (confirmDelete) {
-        console.log("User confirmed deletion");
-
-        // 1. Ta bort från allCategories FÖRST
-        this.allCategories.delete(category);
-        console.log("Category removed from allCategories");
-
-        // 2. Uppdatera den globala data-arrayen FÖRST
-        const itemsToDelete = this.data.filter(item => item.item_category === category);
-        this.data = this.data.filter(item => item.item_category !== category);
-        console.log(`Removed ${itemsToDelete.length} items from global data`);
-
-        // 3. Ta bort från dataTable - använd filter istället för deleteRow
-        // För att undvika "No matching row found" fel
-        const remainingDataTableRows = dataTable.getData().filter(item => item.item_category !== category);
-        dataTable.setData(remainingDataTableRows);
-        console.log("Updated data table");
-
-        // 4. Ta bort kategoriraden från menytabellen
-        // Använd row-objektet direkt istället för index
-        try {
-          row.delete();
-          console.log("Menu row deleted successfully");
-        } catch (deleteError) {
-          console.error("Error deleting menu row:", deleteError);
-          // Fallback: använd setData för att återskapa tabellen utan den borttagna kategorin
-          const remainingMenuRows = menuTable.getData().filter(menuRow => menuRow.menu_category !== category);
-          menuTable.setData(remainingMenuRows);
-          console.log("Menu table recreated without deleted category");
-        }
-
-        // 5. Uppdatera filtret
-        if (updateFilterCallback) {
-          updateFilterCallback();
-        }
-
-        console.log("Category deletion completed successfully");
-      }
-    } catch (error) {
-      console.error("Error during category deletion:", error);
-      alert("An error occurred while deleting the category. Please check the console for details.");
-    }
-  });
-
-  return button;
+export function confirmMsg(msg) {
+  return window.confirm(msg);
 }
 
-  // Uppdatera totaler för en överordnad rad
-  updateParentTotals(parentRow) {
-    if (!parentRow) {
-      console.error("Invalid parent row reference");
-      return;
-    }
-    
-    const rowData = parentRow.getData();
-    if (!rowData) {
-      console.error("Unable to get parent row data");
-      return;
-    }
-    
-    const totals = this.calculatorService.calculateProjectTotals(rowData.tasks);
+/**
+ * Add a new Part to the project.
+ */
+export function addPartRow(project, partTable, itemTable, updatePartOptions, applyPartFilter) {
+  const newId = calcUtils.getNextPartId(project);
+  const newPart = {
+    prt_id: newId,
+    prt_prj_id: project.prj_id,
+    prt_name: `Ny Part ${newId}`,
+    prt_items: [],
+    selected: true,
+    prt_tags: [],
+    prt_comments: []
+  };
+  (project.prt_parts ||= []).push(newPart);
+  calcUtils.updateAllData(project);
+  partTable.addRow(newPart);
+  if (updatePartOptions) updatePartOptions();
+  if (applyPartFilter) applyPartFilter();
+  ajaxHandler.queuedEchoAjax({ prt_id: newId, prt_name: newPart.prt_name, action: "addPart" });
+  setTimeout(() => partTable.getRow(newId)?.getCell("prt_name").edit(), 0);
+}
 
-    // Uppdatera bara den specifika överordnade raden
-    parentRow.update({
-      item_work_task_duration: totals.item_work_task_duration,
-      item_material_user_price: totals.item_material_user_price,
-      item_material_user_price_total:
-        rowData.item_quantity * totals.item_material_user_price,
-      item_work_task_duration_total:
-        rowData.item_quantity * totals.item_work_task_duration,
-    });
-
-    // Uppdatera bara den påverkade kategorin i menyn
-    this.updateCategoryInMenu(rowData.item_category);
-  }
-
-  // Uppdatera en kategori i menytabellen
-// ERSÄTT updateCategoryInMenu metoden i ItemManager.js (rad ~115-140)
-// med denna fixade version:
-
-updateCategoryInMenu(category) {
-  if (!category) return;
-  
-  // Beräkna kategorins totaler FRÅN SCRATCH baserat på aktuell data
-  const categoryTotal = this.calculatorService.calculateCategoryTotals(this.data, category);
-  
-  // Hitta och uppdatera endast den påverkade kategoriraden
-  const menuTable = Tabulator.findTable("#menu-table")[0];
-  if (!menuTable) {
-    console.error("Menu table reference is invalid");
+/**
+ * Add a new Item to the currently selected (or first) Part.
+ */
+export function addItemRow(project, itemTable, partTable, updatePartOptions, applyPartFilter, openItemRows) {
+  const newId = calcUtils.getNextItemId(project);
+  const targetPart = project.prt_parts?.find(p => p.selected) || project.prt_parts?.[0];
+  if (!targetPart) {
+    ajaxHandler.showUserError("Skapa först en Part.");
     return;
   }
-  
-  // VIKTIGT: Använd updateData istället för att manipulera rader direkt
-  const menuData = menuTable.getData();
-  const categoryRowIndex = menuData.findIndex(row => row.menu_category === category);
-  
-  if (categoryRowIndex !== -1) {
-    const rowData = menuData[categoryRowIndex];
-    
-    // Skapa uppdaterat data-objekt
-    const updatedRow = {
-      ...rowData,
-      category_material_user_price_total: categoryTotal.category_material_user_price_total,
-      category_work_task_duration_total: categoryTotal.category_work_task_duration_total
-    };
-    
-    console.log(`Updating menu category "${category}":`, {
-      old_price: rowData.category_material_user_price_total,
-      new_price: categoryTotal.category_material_user_price_total,
-      old_duration: rowData.category_work_task_duration_total,
-      new_duration: categoryTotal.category_work_task_duration_total
-    });
-    
-    // Uppdatera tabellen med nya värden
-    menuTable.updateData([updatedRow]);
+  const newTaskId = calcUtils.getNextTaskId(project);
+  const newTask = {
+    tsk_id: newTaskId,
+    tsk_itm_id: newId,
+    tsk_name: `Ny Task ${newTaskId}`,
+    tsk_total_quantity: 1,
+    tsk_work_task_duration: 0,
+    tsk_material_amount: 0,
+    tsk_material_user_price: 0,
+    tsk_tags: [],
+    tsk_comments: []
+  };
+  const newItem = {
+    itm_id: newId,
+    itm_prt_id: targetPart.prt_id,
+    itm_name: `Ny Item ${newId}`,
+    itm_category: "",
+    itm_quantity: 1,
+    itm_tasks: [newTask],
+    itm_tags: [],
+    itm_comments: []
+  };
+  (targetPart.prt_items ||= []).push(newItem);
+  calcUtils.updateAllData(project);
+  itemTable.addRow(newItem);
+  if (openItemRows) openItemRows.add(newId);
+  ajaxHandler.queuedEchoAjax({ itm_id: newId, itm_name: newItem.itm_name, action: "addItem" });
+  ajaxHandler.queuedEchoAjax({ tsk_id: newTaskId, tsk_name: newTask.tsk_name, itm_id: newId, action: "addTask" });
+  setTimeout(() => itemTable.getRow(newId)?.getCell("itm_name").edit(), 0);
+}
+
+/**
+ * Add a new Task to an Item.
+ */
+export function addTaskRow(project, itemData, itemTable, openItemRows) {
+  const newId = calcUtils.getNextTaskId(project);
+  const newTask = {
+    tsk_id: newId,
+    tsk_itm_id: itemData.itm_id,
+    tsk_name: `Ny Task ${newId}`,
+    tsk_total_quantity: 1,
+    tsk_work_task_duration: 0,
+    tsk_material_amount: 0,
+    tsk_material_user_price: 0,
+    tsk_tags: [],
+    tsk_comments: []
+  };
+  const item = calcUtils.findItemById(project, itemData.itm_id);
+  if (!item) return;
+  (item.itm_tasks ||= []).push(newTask);
+  calcUtils.updateAllData(project);
+  const itemRow = itemTable.getRow(itemData.itm_id);
+  if (!itemRow) return;
+  if (itemRow._subTaskTable) {
+    itemRow._subTaskTable.addRow(newTask);
   } else {
-    console.warn(`Category "${category}" not found in menu table`);
+    itemTable.redraw(true);
   }
+  updateDataAndRefresh(project, item, null, itemTable, null);
+  if (openItemRows) openItemRows.add(itemData.itm_id);
+  ajaxHandler.queuedEchoAjax({ tsk_id: newId, tsk_name: newTask.tsk_name, itm_id: itemData.itm_id, action: "addTask" });
+  setTimeout(() => itemRow._subTaskTable?.getRow(newId)?.getCell("tsk_name").edit(), 0);
 }
 
-  // Uppdatera beräkningar i en underordnad tabell
-  updateCalculations(cell) {
-    let row = cell.getRow();
-    if (!row) {
-      console.error("Row reference is invalid");
-      return;
-    }
-    
-    let data = row.getData();
-    if (!data) {
-      console.error("Unable to get row data");
-      return;
-    }
+/**
+ * Delete a Part (and all its Items/Tasks).
+ */
+export function handleDeletePart(project, rowData, partTable, itemTable, updatePartOptions, applyPartFilter) {
+  const { prt_id, prt_name } = rowData;
+  if (!confirmMsg(`Vill du verkligen ta bort part "${prt_name}" och allt underliggande?`)) return;
+  project.prt_parts = (project.prt_parts || []).filter(p => p.prt_id !== prt_id);
+  partTable?.deleteRow(prt_id);
+  (itemTable?.getData() || []).filter(i => i.itm_prt_id === prt_id).forEach(i => itemTable.deleteRow(i.itm_id));
+  calcUtils.updateAllData(project);
+  if (updatePartOptions) updatePartOptions();
+  if (applyPartFilter) applyPartFilter();
+  itemTable?.redraw(true);
+  ajaxHandler.queuedEchoAjax({ prt_id, action: "deletePart" });
+}
 
-    // Beräkna totaler med hjälp av CalculatorService
-    data = this.calculatorService.updateTaskTotals(data);
+/**
+ * Delete an Item (and all its Tasks).
+ */
+export function handleDeleteItem(project, rowData, partTable, itemTable, openItemRows, updatePartOptions, applyPartFilter) {
+  const { itm_id, itm_name, itm_prt_id } = rowData;
+  if (!confirmMsg(`Vill du verkligen ta bort item "${itm_name}" och dess tasks?`)) return;
+  const part = project.prt_parts?.find(p => p.prt_id === itm_prt_id);
+  if (!part) return;
+  part.prt_items = (part.prt_items || []).filter(i => i.itm_id !== itm_id);
+  itemTable?.deleteRow(itm_id);
+  if (openItemRows) openItemRows.delete(itm_id);
+  calcUtils.updateAllData(project);
+  partTable.getRow(itm_prt_id)?.update(part);
+  if (applyPartFilter) applyPartFilter();
+  ajaxHandler.queuedEchoAjax({ itm_id, action: "deleteItem" });
+}
 
-    // Uppdatera uppgiftsraden
-    row.update(data);
+/**
+ * Delete a Task from an Item.
+ */
+export function handleDeleteTask(project, rowData, itemTable, openItemRows) {
+  const { tsk_id, tsk_name, tsk_itm_id } = rowData;
+  if (!confirmMsg(`Vill du verkligen ta bort task "${tsk_name}"?`)) return;
+  const item = calcUtils.findItemById(project, tsk_itm_id);
+  if (!item) return;
+  item.itm_tasks = (item.itm_tasks || []).filter(t => t.tsk_id !== tsk_id);
+  const itemRow = itemTable.getRow(tsk_itm_id);
+  itemRow?._subTaskTable?.deleteRow(tsk_id);
+  calcUtils.updateAllData(project);
+  updateDataAndRefresh(project, item, null, itemTable, null);
+  ajaxHandler.queuedEchoAjax({ tsk_id, action: "deleteTask" });
+}
 
-    // Hitta och uppdatera korrekt överordnad rad
-    let parentTable = Tabulator.findTable("#data-table")[0];
-    if (!parentTable) {
-      console.error("Parent table reference is invalid");
-      return;
-    }
-    
-    // Säker sökning efter överordnad rad
-    const parentData = parentTable.getData();
-    const parentIndex = parentData.findIndex(pData => 
-      pData.tasks && pData.tasks.some(task => task.estimation_item_id === data.estimation_item_id)
-    );
-    
-    if (parentIndex !== -1) {
-      const parentRow = parentTable.getRow(parentIndex);
-      if (parentRow) {
-        let parentRowData = parentRow.getData();
-        const taskIndex = parentRowData.tasks.findIndex(
-          (task) => task.estimation_item_id === data.estimation_item_id
-        );
-        
-        if (taskIndex !== -1) {
-          parentRowData.tasks[taskIndex] = data;
-          
-          // Uppdatera först den globala data-arrayen
-          const globalIndex = this.data.findIndex(item => item.id === parentRowData.id);
-          if (globalIndex !== -1) {
-            this.data[globalIndex].tasks[taskIndex] = data;
-          }
-          
-          this.updateParentTotals(parentRow);
-        }
-      }
-    }
+/**
+ * Update and refresh Item (and optionally Part) after changes.
+ */
+export function updateDataAndRefresh(project, item, part = null, itemTable = null, partTable = null) {
+  calcUtils.updateAllData(project);
+  if (itemTable) itemTable.getRow(item.itm_id)?.update(item);
+  const targetPart = part || project.prt_parts?.find(p => p.prt_id === item.itm_prt_id);
+  if (targetPart && partTable) partTable.getRow(targetPart.prt_id)?.update(targetPart);
+}
+
+/**
+ * Update Part name with sanitization.
+ */
+export function updatePartName(project, cell, partTable, itemTable, updatePartOptions) {
+  const { prt_id } = cell.getRow().getData();
+  let newName = cell.getValue();
+  // Sanitize
+  if (typeof newName === 'string') {
+    newName = newName
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;")
+      .replace(/\//g, "&#x2F;")
+      .replace(/javascript:/gi, "")
+      .replace(/data:/gi, "")
+      .replace(/vbscript:/gi, "")
+      .trim();
   }
+  const part = project.prt_parts?.find(p => p.prt_id === prt_id);
+  if (!part) return;
+  part.prt_name = newName;
+  calcUtils.updateAllData(project);
+  cell.getRow().update(part);
+  if (updatePartOptions) updatePartOptions();
+  itemTable.redraw(true);
+  ajaxHandler.queuedEchoAjax({ prt_id, prt_name: newName, action: "updatePartName" });
+}
 
-  // Ta bort en uppgiftsrad och uppdatera beräkningar
-  deleteTaskRow(row) {
-    if (!row) {
-      console.error("Row reference is invalid");
-      return;
-    }
-    
-    // VIKTIGT: Spara all nödvändig data innan vi gör något som kan göra row ogiltig
-    const taskData = row.getData();
-    if (!taskData) {
-      console.error("Unable to get task data");
-      return;
-    }
-    
-    const estimationId = taskData.estimation_item_id;
-    const rowIndex = row.getIndex();
-    const subTable = row.getTable();
-    
-    let parentTable = Tabulator.findTable("#data-table")[0];
-    if (!parentTable) {
-      console.error("Parent table reference is invalid");
-      return;
-    }
-    
-    // Säker sökning efter överordnad rad
-    const parentData = parentTable.getData();
-    const parentIndex = parentData.findIndex(pData => 
-      pData.tasks && pData.tasks.some(task => task.estimation_item_id === estimationId)
-    );
-    
-    if (parentIndex !== -1) {
-      // Uppdatera den globala data-arrayen först
-      const parentRow = parentTable.getRow(parentIndex);
-      if (parentRow) {
-        let parentRowData = parentRow.getData();
-        const category = parentRowData.item_category;
-        
-        // Uppdatera den globala data-arrayen först
-        const globalIndex = this.data.findIndex(item => item.id === parentRowData.id);
-        if (globalIndex !== -1) {
-          this.data[globalIndex].tasks = this.data[globalIndex].tasks.filter(
-            task => task.estimation_item_id !== estimationId
-          );
-        }
-        
-        // Uppdatera sedan den lokala data-strukturen
-        parentRowData.tasks = parentRowData.tasks.filter(
-          task => task.estimation_item_id !== estimationId
-        );
-        
-        // Ta bort uppgiftsraden EFTER att alla datastrukturer är uppdaterade
-        if (subTable) {
-          subTable.deleteRow(rowIndex);
-        }
-        
-        // Uppdatera överordnad rad och beräkna nya totaler
-        this.updateParentTotals(parentRow);
-      }
-    } else {
-      // Om vi inte hittade en föräldrarad, ta bara bort uppgiftsraden
-      if (subTable) {
-        subTable.deleteRow(rowIndex);
-      }
-    }
-  }
+/**
+ * Update Item cell (e.g. name, quantity) and related totals.
+ */
+export function updateItemCell(project, cell, itemTable, partTable) {
+  const { itm_id, itm_prt_id } = cell.getRow().getData();
+  const part = project.prt_parts?.find(p => p.prt_id === itm_prt_id);
+  const item = part?.prt_items?.find(i => i.itm_id === itm_id);
+  if (!item) return;
+  const field = cell.getField(), value = cell.getValue();
+  item[field] = value;
+  calcUtils.updateItemTotals(item);
+  calcUtils.updatePartTotals(part);
+  calcUtils.updateProjectTotals(project);
+  updateDataAndRefresh(project, item, part, itemTable, partTable);
+  ajaxHandler.queuedEchoAjax({ itm_id, [field]: value, action: "updateItem" });
+}
 
-  // Lägg till en ny uppgiftsrad
-  addTaskRow(parentRow) {
-    if (!parentRow) {
-      console.error("Parent row reference is invalid");
-      return;
-    }
-    
-    const parentData = parentRow.getData();
-    if (!parentData) {
-      console.error("Unable to get parent row data");
-      return;
-    }
-    
-    const newTask = {
-      estimation_item_id: `E${Math.floor(Math.random() * 1000000)}`, // Öka för att minska kollisionsrisk
-      total_quantity: 1,
-      work_task_duration: 0,
-      work_task_duration_total: 0,
-      material_amount: 1,
-      material_user_price: 0,
-      material_user_price_total: 0,
-    };
+/**
+ * Move Item to another Part and update all references.
+ */
+export function moveItemPartCell(project, cell, partTable, itemTable, partColors, applyPartFilter) {
+  const { itm_id } = cell.getRow().getData();
+  const newPartId = cell.getValue();
+  const { newItem, oldPart, newPart } = calcUtils.moveItemToPart(project, itm_id, newPartId);
+  if (!newItem) return;
+  calcUtils.updateAllData(project);
+  [oldPart, newPart].forEach(p => p && partTable.getRow(p.prt_id)?.update(p));
+  const row = cell.getRow();
+  row.update(newItem);
+  if (partColors) partColors.updateRowPartColor(row, newPartId);
+  row._subTaskTable?.getRows().forEach(taskRow => partColors && partColors.updateRowPartColor(taskRow, newPartId));
+  if (applyPartFilter) applyPartFilter();
+  ajaxHandler.queuedEchoAjax({ itm_id, newPartId, action: "moveItemPart" });
+}
 
-    // Lägg till den nya uppgiften i överordnad rads uppgiftsarray
-    if (!parentData.tasks) {
-      parentData.tasks = [];
-    }
-    parentData.tasks.push(newTask);
-    
-    // Uppdatera först den globala data-arrayen
-    const globalIndex = this.data.findIndex(item => item.id === parentData.id);
-    if (globalIndex !== -1) {
-      if (!this.data[globalIndex].tasks) {
-        this.data[globalIndex].tasks = [];
-      }
-      this.data[globalIndex].tasks.push({...newTask});
-    }
-
-    // Uppdatera bara den specifika överordnade raden
-    parentRow.update(parentData);
-
-    // Uppdatera bara undertabellen för denna överordnade
-    const subTableHolder = parentRow
-      .getElement()
-      .querySelector(".subtable-holder");
-    if (subTableHolder) {
-      const subTable = subTableHolder.querySelector(".tabulator");
-      if (subTable) {
-        const subTableInstance = Tabulator.findTable(subTable)[0];
-        if (subTableInstance) {
-          // Lägg bara till den nya raden
-          subTableInstance.addData([{...newTask}]);
-        }
-      }
-    }
-
-    // Uppdatera totaler för den överordnade raden
-    this.updateParentTotals(parentRow);
-  }
-
-  // Lägg till en ny artikelrad
-  addItemRow() {
-    // Välj första tillgängliga kategori eller skapa en ny
-    const firstCategory = Array.from(this.allCategories)[0] || "New Category";
-    
-    // Generera unik ID
-    const newId = Math.max(...this.data.map(item => item.id), 0) + 1;
-
-    const newItem = {
-      id: newId,
-      item_name: "New Item",
-      item_category: firstCategory,
-      item_quantity: 1,
-      item_material_user_price: 0,
-      item_material_user_price_total: 0,
-      item_work_task_duration: 0,
-      item_work_task_duration_total: 0,
-      tasks: [
-        {
-          estimation_item_id: `E${Math.floor(Math.random() * 1000000)}`, // Öka för att minska kollisionsrisk
-          total_quantity: 1,
-          work_task_duration: 0,
-          work_task_duration_total: 0,
-          material_amount: 1,
-          material_user_price: 0,
-          material_user_price_total: 0,
-        },
-      ],
-    };
-
-    // Lägg till i den globala data-arrayen först
-    this.data.push({...newItem});
-
-    // Lägg bara till den nya raden i dataTable
-    const dataTable = Tabulator.findTable("#data-table")[0];
-    if (dataTable) {
-      dataTable.addData([{...newItem}]);
-    }
-
-    // Uppdatera bara den påverkade kategorin i menyn
-    this.updateCategoryInMenu(firstCategory);
-  }
-
-  // Hantera kategoriändring i menytabellen
-// ERSÄTT handleCategoryEdit metoden i ItemManager.js (rad ~280-320)
-// med denna fixade version:
-
-handleCategoryEdit(cell, updateFilterCallback, refreshCategoryDropdownsCallback) {
-  if (!cell) {
-    console.error("Cell reference is invalid");
+/**
+ * Update Task cell and recalculate all totals.
+ */
+export function updateTaskCell(project, cell, itemTable, partTable) {
+  const taskData = cell.getRow().getData();
+  for (const part of project.prt_parts || []) for (const item of (part.prt_items || [])) {
+    if (item.itm_id !== taskData.tsk_itm_id) continue;
+    const task = (item.itm_tasks || []).find(t => t.tsk_id === taskData.tsk_id);
+    if (!task) continue;
+    const field = cell.getField(), value = cell.getValue();
+    task[field] = value;
+    calcUtils.updateTaskTotals(task);
+    calcUtils.updateItemTotals(item);
+    calcUtils.updatePartTotals(part);
+    calcUtils.updateProjectTotals(project);
+    cell.getRow().update(task);
+    updateDataAndRefresh(project, item, part, itemTable, partTable);
+    ajaxHandler.queuedEchoAjax({ tsk_id: task.tsk_id, [field]: value, action: "updateTask" });
     return;
   }
-  
-  const oldCategory = cell.getOldValue();
-  const newCategory = cell.getValue();
-  
-  if (oldCategory === newCategory) return;
-
-  console.log(`Menu category change: "${oldCategory}" -> "${newCategory}"`);
-
-  // Uppdatera allCategories set
-  this.allCategories.delete(oldCategory);
-  this.allCategories.add(newCategory);
-
-  // Uppdatera den globala data-arrayen först
-  this.data.forEach(item => {
-    if (item.item_category === oldCategory) {
-      item.item_category = newCategory;
-    }
-  });
-
-  // Uppdatera kategorinamn i alla påverkade artiklar
-  const dataTable = Tabulator.findTable("#data-table")[0];
-  if (!dataTable) {
-    console.error("Data table reference is invalid");
-    return;
-  }
-  
-  // Uppdatera data i tabellen med updateData istället för att iterera över rader
-  const updatedRows = dataTable.getData()
-    .filter(row => row.item_category === oldCategory)
-    .map(row => ({...row, item_category: newCategory}));
-    
-  if (updatedRows.length > 0) {
-    dataTable.updateData(updatedRows);
-    console.log(`Updated ${updatedRows.length} items with new category`);
-  }
-
-  // INGEN KATEGORI-UPPDATERING BEHÖVS HÄR eftersom det redan är gjort i menyn
-  // och alla items redan har rätt kategori
-
-  // Uppdatera filtret
-  if (updateFilterCallback) {
-    updateFilterCallback();
-  }
-
-  // Uppdatera rullgardinsmenyer i datatabellen
-  if (refreshCategoryDropdownsCallback) {
-    refreshCategoryDropdownsCallback();
-  }
-  
-  console.log("Menu category edit completed");
 }
-  // Uppdatera kvantitet för en artikel
-  handleQuantityEdit(cell) {
-    if (!cell) {
-      console.error("Cell reference is invalid");
-      return;
-    }
-    
-    const row = cell.getRow();
-    if (!row) {
-      console.error("Row reference is invalid");
-      return;
-    }
-    
-    const rowData = row.getData();
-    if (!rowData) {
-      console.error("Unable to get row data");
-      return;
-    }
-
-    // Uppdatera först den globala data-arrayen
-    const globalIndex = this.data.findIndex(item => item.id === rowData.id);
-    if (globalIndex !== -1) {
-      this.data[globalIndex].item_quantity = rowData.item_quantity;
-    }
-
-    // Uppdatera totaler för denna rad med CalculatorService
-    this.calculatorService.updateItemTotals(rowData);
-    row.update(rowData);
-
-    // Uppdatera bara den påverkade kategorin i menyn
-    this.updateCategoryInMenu(rowData.item_category);
-  }
-
-  // Ta bort en artikel
-  deleteItem(cell) {
-    if (!cell) {
-      console.error("Cell reference is invalid");
-      return;
-    }
-    
-    // VIKTIGT: Spara all nödvändig information innan någon operation utförs
-    const row = cell.getRow();
-    if (!row) {
-      console.error("Row reference is invalid");
-      return;
-    }
-    
-    const rowData = row.getData();
-    if (!rowData) {
-      console.error("Unable to get row data");
-      return;
-    }
-    
-    const category = rowData.item_category;
-    const itemId = rowData.id;
-    const rowIndex = row.getIndex();
-    const dataTable = cell.getTable(); // Spara tabellreferensen
-
-    // Uppdatera den globala data-arrayen INNAN radoperationer
-    this.data = this.data.filter(item => item.id !== itemId);
-
-    // Använd det sparade indexet och tabellreferensen för att ta bort raden
-    // EFTER att vi har uppdaterat alla datastrukturer
-    if (dataTable) {
-      dataTable.deleteRow(rowIndex);
-    }
-
-    // Uppdatera bara den påverkade kategorin i menyn
-    // Detta körs EFTER att raden har tagits bort
-    this.updateCategoryInMenu(category);
-  }
-
-  // Lägg till en ny kategori i menyn
-  addMenuCategory() {
-    const newCategory = `New Category ${this.newCategoryCounter++}`;
-    this.allCategories.add(newCategory);
-
-    // Skapa ett nytt kategoriobjekt
-    const newCategoryData = {
-      menu_category: newCategory,
-      category_material_user_price_total: 0,
-      category_work_task_duration_total: 0,
-      selected: true,
-    };
-
-    // Lägg bara till den nya kategorin i menytabellen
-    const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (menuTable) {
-      menuTable.addData([{...newCategoryData}]);
-    }
-    
-    return newCategory;
-  }
-
-// Rendera kategori-dropdown för dataTable
-// Uppdaterad renderCategoryDropdown metod för ItemManager.js
-// Denna ersätter den befintliga metoden
-
-// ERSÄTT hela renderCategoryDropdown metoden i ItemManager.js (rad ~320-430)
-// med denna fixade version:
-
-renderCategoryDropdown(cell) {
-  if (!cell) {
-    console.error("Cell reference is invalid");
-    return document.createElement("div");
-  }
-  
-  const category = cell.getValue();
-  const select = document.createElement("select");
-  select.style.width = "100%";
-  select.style.height = "100%";
-  select.style.border = "none";
-  select.style.background = "transparent";
-  
-  // Hämta menytabellen för att få alla tillgängliga kategorier
-  const menuTable = Tabulator.findTable("#menu-table")[0];
-  if (!menuTable) {
-    console.error("Menu table reference is invalid");
-    return select;
-  }
-  
-  menuTable.getData().forEach((row) => {
-    const option = document.createElement("option");
-    option.value = row.menu_category;
-    option.text = row.menu_category;
-    if (category === row.menu_category) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  });
-
-  select.addEventListener("change", (e) => {
-    e.stopPropagation(); // Förhindra att eventet bubblar upp
-    
-    const oldCategory = cell.getValue(); // VIKTIGT: Hämta INNAN vi uppdaterar
-    const newCategory = e.target.value;
-    
-    if (oldCategory === newCategory) return;
-
-    console.log(`Changing category from "${oldCategory}" to "${newCategory}"`);
-
-    // Säkerhetskontroller
-    const row = cell.getRow();
-    if (!row) {
-      console.error("Row reference is invalid");
-      return;
-    }
-    
-    const rowData = row.getData();
-    if (!rowData) {
-      console.error("Unable to get row data");
-      return;
-    }
-
-    // KRITISKT: Uppdatera först den globala data-arrayen
-    const dataIndex = this.data.findIndex(item => item.id === rowData.id);
-    if (dataIndex !== -1) {
-      this.data[dataIndex].item_category = newCategory;
-      console.log("Updated global data for item:", rowData.id);
-    }
-
-    // Uppdatera rowData
-    rowData.item_category = newCategory;
-    
-    // KRITISKT: Uppdatera cellen och raden för att Tabulator ska känna till ändringen
-    try {
-      // Uppdatera cell-värdet direkt
-      cell.getElement().querySelector('select').value = newCategory;
-      
-      // Trigga Tabulator's interna uppdatering
-      row.update(rowData);
-      
-      // Force en re-render av cellen om nödvändigt
-      cell.getTable().redraw();
-      
-    } catch (updateError) {
-      console.error("Error updating cell/row:", updateError);
-    }
-
-    // FIXAT: Uppdatera BÅDA kategorierna i RÄTT ORDNING
-    // Först den gamla kategorin (som nu har förlorat ett item)
-    console.log("Updating old category:", oldCategory);
-    this.updateCategoryInMenu(oldCategory);
-    
-    // Sedan den nya kategorin (som nu har fått ett item)  
-    console.log("Updating new category:", newCategory);
-    this.updateCategoryInMenu(newCategory);
-    
-    console.log("Category change completed");
-  });
-
-  // Lägg till focus/blur handlers för bättre UX
-  select.addEventListener("focus", (e) => {
-    e.target.style.outline = "2px solid #007bff";
-  });
-  
-  select.addEventListener("blur", (e) => {
-    e.target.style.outline = "none";
-  });
-  
-  return select;
-}
-
-  // Återställ filter för meny
-  resetMenuFilter() {
-    const menuTable = Tabulator.findTable("#menu-table")[0];
-    if (!menuTable) {
-      console.error("Menu table reference is invalid");
-      return;
-    }
-    
-    // Uppdatera alla data på en gång för bättre prestanda
-    const allData = menuTable.getData().map(row => ({...row, selected: true}));
-    menuTable.updateData(allData);
-  }
-}
-
-// Exportera klassen för användning i andra moduler
-export default ItemManager;
