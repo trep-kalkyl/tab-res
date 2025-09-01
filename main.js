@@ -8,7 +8,7 @@ import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@edd60d1c42de34265b64f48c77a4b577404e05fa/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
 import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
-import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d5da684625374863f84c4e5bf7adc8362fa6ab01/materialLinks.js";
+import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -294,13 +294,8 @@ const getTaskTableColumns = () => [
   formatter: function(cell) {
     const rowData = cell.getRow().getData();
     const itemType = rowData.tsk_material_type;
-    // Static label per type (can also be imported from MaterialLinksModule.config)
-    const typeLabels = {
-      "SV-ENR": "Show SV-ENR Links (5)",
-      "Type 2": "Show Type 2 Links (3)",
-      "Type 5": "Show Type 5 Links (7)"
-    };
-    return `<span class="link-like-text">${typeLabels[itemType] || "Show Links"}</span>`;
+    const typeLabels = MaterialLinksModule.config.linkTextPerType;
+    return `<span class="link-like-text">${typeLabels[itemType] || typeLabels.default}</span>`;
   },
   cellClick: function(e, cell) {
     const rowData = cell.getRow().getData();
