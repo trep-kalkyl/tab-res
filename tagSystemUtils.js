@@ -447,25 +447,24 @@ overlay.setAttribute("aria-modal", "true");
     input.placeholder = "Skriv ny tagg...";
     inputContainer.appendChild(input);
     const addButton = document.createElement("button");
-    addButton.className = "btn btn-primary";
+    addButton.className = "tab-modal-btn tab-modal-confirm";
     addButton.textContent = "Lägg till";
     inputContainer.appendChild(addButton);
     newTagSection.appendChild(inputContainer);
     editorBox.appendChild(newTagSection);
 
     // Knappar
-    const buttonContainer = document.createElement("div");
-    buttonContainer.className = "button-container";
-    buttonContainer.style = "display:flex;justify-content:space-between;margin-top:14px;";
-    const saveButton = document.createElement("button");
-    saveButton.className = "btn btn-success";
-    saveButton.textContent = "Spara";
-    buttonContainer.appendChild(saveButton);
-    const cancelButton = document.createElement("button");
-    cancelButton.className = "btn btn-secondary";
-    cancelButton.textContent = "Avbryt";
-    buttonContainer.appendChild(cancelButton);
-    editorBox.appendChild(buttonContainer);
+const buttonContainer = document.createElement("div");
+buttonContainer.className = "tab-modal-footer tab-modal-buttons";
+const saveButton = document.createElement("button");
+saveButton.className = "tab-modal-btn tab-modal-confirm";
+saveButton.textContent = "Spara";
+buttonContainer.appendChild(saveButton);
+const cancelButton = document.createElement("button");
+cancelButton.className = "tab-modal-btn tab-modal-cancel";
+cancelButton.textContent = "Avbryt";
+buttonContainer.appendChild(cancelButton);
+editorBox.appendChild(buttonContainer);
 
     // Funktion för att lägga till tagg med XSS-skydd
     const addTag = (tag) => {
