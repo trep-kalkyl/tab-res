@@ -10,6 +10,7 @@ import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bf
 import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
 import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
 import { mathExpressionEditor } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2cbad2a1e5793822760906fc1b44c489b3b03b20/mathExpressionEditor.js";
+import * as ExportModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@06e5ba13188cf37f5336ccbb0246c9c5f2909a17/ExportModule.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -202,6 +203,9 @@ const getPartTableColumns = () => [
   { title: "Part-namn", field: "prt_name", formatter: "plaintext", editor: "input", cellEdited: (cell) => ItemManager.updatePartName(project, cell, partTable, itemTable, updatePartOptions) },
   { title: "Materialpris Tot", field: "prt_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: tableUtils.formatHours },
+  ExportModule.getPartExportColumn({
+    exclude: ["selected", "prt_comments", "prt_tags", "_subTaskTable"] // Anpassa din exkluderingslista här!
+  }),
   ...(commentsModule ? [commentsModule.createCommentColumn('part', 'prt_name', { width: 200, title: "Part Comments" })] : [])
 ];
 
@@ -230,6 +234,9 @@ const getItemTableColumns = () => [
   { title: "Materialpris Tot", field: "itm_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Arbetstid", field: "itm_work_task_duration", formatter: tableUtils.formatHours },
   { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: tableUtils.formatHours },
+  ExportModule.getItemExportColumn({
+    exclude: ["selected", "itm_comments", "itm_tags", "_subTaskTable"] // Anpassa efter behov!
+  }),
   ...(commentsModule ? [commentsModule.createCommentColumn('item', 'itm_name', { width: 200, title: "Item Comments" })] : [])
 ];
 
@@ -246,9 +253,7 @@ const getTaskTableColumns = () => [
     field: "tsk_material_number",
     editor: "input",
     cellEdited: function(cell) {
-      // Uppdatera länk-kolumnens label
       MaterialLinksModule.updateMaterialLinkColumn(cell.getRow());
-      // AJAX
       const rowData = cell.getRow().getData();
       ajaxHandler.queuedEchoAjax({
         tsk_id: rowData.tsk_id,
@@ -289,27 +294,27 @@ const getTaskTableColumns = () => [
       });
     }
   },
-{
-  title: "Material Links",
-  field: "tsk_material_link",
-  formatter: function(cell) {
-    const rowData = cell.getRow().getData();
-    const itemType = rowData.tsk_material_type;
-    const typeLabels = MaterialLinksModule.config.linkTextPerType;
-    return `<span class="link-like-text">${typeLabels[itemType] || typeLabels.default}</span>`;
+  {
+    title: "Material Links",
+    field: "tsk_material_link",
+    formatter: function(cell) {
+      const rowData = cell.getRow().getData();
+      const itemType = rowData.tsk_material_type;
+      const typeLabels = MaterialLinksModule.config.linkTextPerType;
+      return `<span class="link-like-text">${typeLabels[itemType] || typeLabels.default}</span>`;
+    },
+    cellClick: function(e, cell) {
+      const rowData = cell.getRow().getData();
+      MaterialLinksModule.linksModalUtils.show(
+        rowData.tsk_material_number,
+        rowData.tsk_material_name,
+        rowData.tsk_material_type,
+        MaterialLinksModule
+      );
+    },
+    width: 120,
+    hozAlign: "center"
   },
-  cellClick: function(e, cell) {
-    const rowData = cell.getRow().getData();
-    MaterialLinksModule.linksModalUtils.show(
-      rowData.tsk_material_number,
-      rowData.tsk_material_name,
-      rowData.tsk_material_type,
-      MaterialLinksModule
-    );
-  },
-  width: 120,
-  hozAlign: "center"
-},
 
   // ===== SLUT MATERIAL-LÄNK-KOLUMNER =====
 
@@ -318,81 +323,14 @@ const getTaskTableColumns = () => [
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: tableUtils.formatHours },
-  { 
-  title: "Work Task Code",
-  field: "tsk_work_task_code",
-  editor: "input",
-  cellEdited: function(cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_work_task_code",
-      value: rowData.tsk_work_task_code,
-      action: "updateTaskField"
-    });
-  }
-},
-{ 
-  title: "Work Task Code Type",
-  field: "tsk_work_task_code_type",
-  editor: "input", // Eller "list" om ni har fasta typer
-  cellEdited: function(cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_work_task_code_type",
-      value: rowData.tsk_work_task_code_type,
-      action: "updateTaskField"
-    });
-  }
-},
-{ 
-  title: "Work Task Description",
-  field: "tsk_work_task_description",
-  editor: "input",
-  cellEdited: function(cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_work_task_description",
-      value: rowData.tsk_work_task_description,
-      action: "updateTaskField"
-    });
-  }
-},
-{ 
-  title: "Material Unit",
-  field: "tsk_material_unit",
-  editor: "list",
-  editorParams: { values: ["m", "l", "st", "kg"] },
-  cellEdited: function(cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_material_unit",
-      value: rowData.tsk_material_unit,
-      action: "updateTaskField"
-    });
-  }
-},
-{ 
-  title: "Material Price Currency",
-  field: "tsk_material_currency",
-  editor: "list",
-  editorParams: { values: ["SEK", "EUR", "USD"] },
-  cellEdited: function(cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_material_currency",
-      value: rowData.tsk_material_currency,
-      action: "updateTaskField"
-    });
-  }
-},
+
+  // ===== EXPORT-KOLUMN FÖR TASK =====
+  ExportModule.getTaskExportColumn({
+    exclude: ["tsk_comments", "tsk_tags"] // Anpassa efter behov!
+  }),
+
   ...(commentsModule ? [commentsModule.createCommentColumn('task', 'tsk_name', { width: 200, title: "Task Comments" })] : [])
 ];
-
 // ======= TABELLER =======
 const setupTables = async () => {
   if (!commentsModule) {
