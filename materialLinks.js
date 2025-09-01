@@ -17,6 +17,35 @@ export const MaterialLinksModule = {
     title: null,
     initialized: false,
 
+    // Security utilities
+    sanitizeForHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#x27;")
+            .replace(/\//g, "&#x2F;");
+    },
+
+    sanitizeForAttribute(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/['"\\]/g, '') // Ta bort quotes och backslashes
+            .replace(/[<>]/g, '')   // Ta bort HTML-tecken
+            .replace(/javascript:/gi, '') // Ta bort javascript: protokoll
+            .replace(/data:/gi, '')       // Ta bort data: protokoll
+            .replace(/vbscript:/gi, '')   // Ta bort vbscript:
+            .trim();
+    },
+
+    validateMaterialNumber(materialNumber) {
+        if (!materialNumber) return '';
+        // Tillåt endast alfanumeriska tecken, bindestreck och understreck
+        return String(materialNumber).replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 50);
+    },
+
     // Global copy function
     async copyToClipboard(text, fieldName) {
         if (!text) {
@@ -24,14 +53,17 @@ export const MaterialLinksModule = {
             return;
         }
         
+        // Sanitera innan kopiering
+        const sanitizedText = this.sanitizeForAttribute(text);
+        
         try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(sanitizedText);
             this.showMobileToast(`${fieldName} kopierat! ✓`);
             this.vibrate();
         } catch (err) {
             // Fallback för äldre browsers
             const textArea = document.createElement('textarea');
-            textArea.value = text;
+            textArea.value = sanitizedText;
             document.body.appendChild(textArea);
             textArea.select();
             document.execCommand('copy');
@@ -66,10 +98,14 @@ export const MaterialLinksModule = {
     linksModalUtils: {
         // Generate links based on item type
         generateLinks(materialNumber, materialName, itemType) {
+            // Sanitera och validera input
+            const safeMaterialNumber = MaterialLinksModule.validateMaterialNumber(materialNumber);
+            const safeMaterialName = MaterialLinksModule.sanitizeForAttribute(materialName);
+            
             let links = [];
-            const numberAndName = `${materialNumber || ''} ${materialName || ''}`.trim();
-            const encodedNumber = encodeURIComponent(materialNumber || '');
-            const encodedName = encodeURIComponent(materialName || '');
+            const numberAndName = `${safeMaterialNumber || ''} ${safeMaterialName || ''}`.trim();
+            const encodedNumber = encodeURIComponent(safeMaterialNumber || '');
+            const encodedName = encodeURIComponent(safeMaterialName || '');
             const encodedNumberAndName = encodeURIComponent(numberAndName);
 
             switch(itemType) {
@@ -115,21 +151,40 @@ export const MaterialLinksModule = {
                 return;
             }
 
-            // Set modal title with integrated copy icons
+            // Sanitera alla värden innan användning
+            const safeMaterialNumber = parentModule.sanitizeForHTML(materialNumber);
+            const safeMaterialName = parentModule.sanitizeForHTML(materialName);
+            const safeItemType = parentModule.sanitizeForHTML(itemType);
+            
+            // Sanitera för attribut-användning (onclick)
+            const attrSafeMaterialNumber = parentModule.sanitizeForAttribute(materialNumber);
+            const attrSafeMaterialName = parentModule.sanitizeForAttribute(materialName);
+
+            // Set modal title med säkra onclick-handlers
             parentModule.title.innerHTML = `
-                Search Links for ${itemType || 'Material'}: 
-                ${materialNumber || 'No Number'} 
-                <button class="tsk-material-inline-copy-btn" onclick="MaterialLinksModule.copyToClipboard('${materialNumber || ''}', 'Artikelnummer')" title="Kopiera artikelnummer">📋</button>
-                - ${materialName || 'No Name'} 
-                <button class="tsk-material-inline-copy-btn" onclick="MaterialLinksModule.copyToClipboard('${materialName || ''}', 'Materialnamn')" title="Kopiera materialnamn">📝</button>
+                Search Links for ${safeItemType || 'Material'}: 
+                ${safeMaterialNumber || 'No Number'} 
+                <button class="tsk-material-inline-copy-btn" data-copy-value="${attrSafeMaterialNumber}" data-copy-field="Artikelnummer" title="Kopiera artikelnummer">📋</button>
+                - ${safeMaterialName || 'No Name'} 
+                <button class="tsk-material-inline-copy-btn" data-copy-value="${attrSafeMaterialName}" data-copy-field="Materialnamn" title="Kopiera materialnamn">📝</button>
             `;
+
+            // Lägg till event listeners för copy-knappar istället för onclick
+            const copyButtons = parentModule.title.querySelectorAll('.tsk-material-inline-copy-btn');
+            copyButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const value = this.getAttribute('data-copy-value');
+                    const field = this.getAttribute('data-copy-field');
+                    parentModule.copyToClipboard(value, field);
+                });
+            });
 
             // Generate and display links
             const links = this.generateLinks(materialNumber, materialName, itemType);
             const linksList = links
                 .map(link => `
                     <div class="tab-modal-link-item">
-                        <a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.name}</a>
+                        <a href="${parentModule.sanitizeForHTML(link.url)}" target="_blank" rel="noopener noreferrer">${parentModule.sanitizeForHTML(link.name)}</a>
                     </div>
                 `).join("");
 
