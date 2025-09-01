@@ -368,24 +368,24 @@ class CommentModalManager {
     
     createModalIfNotExists() {
         if (!document.getElementById(this.modalId)) {
-            const modalHtml = `
-                <div id="${this.modalId}" class="tab-modal" style="display: none;">
-                    <div class="tab-modal-content">
-                        <div class="tab-modal-header">
-                            <h4 id="modalCommentTitle">Comments</h4>
-                        </div>
-                        <div class="tab-modal-body">
-                            <div id="commentsContainer" class="comments-container"></div>
-                            <textarea id="commentInput" placeholder="Add a comment..." rows="3"></textarea>
-                            <div class="tab-modal-timestamp" id="commentTimestamp"></div>
-                        </div>
-                        <div class="tab-modal-footer">
-                            <button id="saveComment" type="button">Add Comment</button>
-                            <button id="cancelComment" type="button">Close</button>
-                        </div>
-                    </div>
-                </div>
-            `;
+const modalHtml = `
+  <div id="${this.modalId}" class="tab-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modalCommentTitle">
+    <div class="tab-modal-content">
+      <div class="tab-modal-header">
+        <h4 id="modalCommentTitle" class="tab-modal-title">Comments</h4>
+      </div>
+      <div class="tab-modal-body">
+        <div id="commentsContainer" class="comments-container"></div>
+        <textarea id="commentInput" placeholder="Add a comment..." rows="3"></textarea>
+        <div class="tab-modal-timestamp" id="commentTimestamp"></div>
+      </div>
+      <div class="tab-modal-footer tab-modal-buttons">
+        <button id="saveComment" type="button" class="tab-modal-btn tab-modal-confirm">Add Comment</button>
+        <button id="cancelComment" type="button" class="tab-modal-btn tab-modal-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
         }
     }
