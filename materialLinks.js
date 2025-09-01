@@ -205,7 +205,13 @@ export const MaterialLinksModule = {
 
     // Function to update material link column for a specific row
     updateMaterialLinkColumn(row) {
-        row.reformat();
+        // Använd getCell för att uppdatera den specifika kolumnen
+        const linkCell = row.getCell("tsk_material_link");
+        if (linkCell) {
+            // Trigga en omformatering av cellen genom att uppdatera raden
+            const currentData = row.getData();
+            row.update(currentData);
+        }
     },
 
     // Get column configuration for material fields
