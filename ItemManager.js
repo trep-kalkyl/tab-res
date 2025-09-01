@@ -233,22 +233,39 @@ export function moveItemPartCell(project, cell, partTable, itemTable, partColors
 
 /**
  * Update Task cell and recalculate all totals.
+ * This version ensures totals update instantly for task, item, part, and project.
  */
 export function updateTaskCell(project, cell, itemTable, partTable) {
   const taskData = cell.getRow().getData();
-  for (const part of project.prt_parts || []) for (const item of (part.prt_items || [])) {
-    if (item.itm_id !== taskData.tsk_itm_id) continue;
-    const task = (item.itm_tasks || []).find(t => t.tsk_id === taskData.tsk_id);
-    if (!task) continue;
-    const field = cell.getField(), value = cell.getValue();
-    task[field] = value;
-    calcUtils.updateTaskTotals(task);
-    calcUtils.updateItemTotals(item);
-    calcUtils.updatePartTotals(part);
-    calcUtils.updateProjectTotals(project);
-    cell.getRow().update(task);
-    updateDataAndRefresh(project, item, part, itemTable, partTable);
-    ajaxHandler.queuedEchoAjax({ tsk_id: task.tsk_id, [field]: value, action: "updateTask" });
-    return;
+  let item = null, part = null, task = null;
+
+  // Find parent Item, Part, and Task object
+  for (const p of project.prt_parts || []) {
+    for (const i of p.prt_items || []) {
+      if (i.itm_id == taskData.tsk_itm_id) {
+        item = i;
+        part = p;
+        task = i.itm_tasks?.find(t => t.tsk_id == taskData.tsk_id);
+        break;
+      }
+    }
+    if (item) break;
   }
+  if (!task || !item || !part) return;
+
+  const field = cell.getField(), value = cell.getValue();
+  task[field] = value;
+
+  // Recalculate all totals
+  calcUtils.updateTaskTotals(task);
+  calcUtils.updateItemTotals(item);
+  calcUtils.updatePartTotals(part);
+  calcUtils.updateProjectTotals(project);
+
+  // Update rows in Tabulator
+  cell.getRow().update({ ...task });
+  if (itemTable) itemTable.getRow(item.itm_id)?.update({ ...item });
+  if (partTable) partTable.getRow(part.prt_id)?.update({ ...part });
+
+  ajaxHandler.queuedEchoAjax({ tsk_id: task.tsk_id, [field]: value, action: "updateTask" });
 }
