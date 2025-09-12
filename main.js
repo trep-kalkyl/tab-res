@@ -411,7 +411,7 @@ let itemsTagFilter = null;
 const applyPartFilter = () => {
   const selectedIds = (partTable?.getData() || []).filter(p => p.selected).map(p => p.prt_id);
   const combinedFilter = (data, filterParams) => {
-    const partMatch = selectedIds.length === 0 || selectedIds.includes(data.itm_prt_id);
+    const partMatch = selectedIds.length > 0 && selectedIds.includes(data.itm_prt_id);
     if (!partMatch) return false;
     if (itemsTagFilter && itemsTagFilter.length > 0) {
       const tags = Array.isArray(data.itm_tags) ? data.itm_tags : [];
