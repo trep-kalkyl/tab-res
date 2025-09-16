@@ -120,3 +120,16 @@ export function echoAjax(data, retryCount = 0) {
 export function queuedEchoAjax(data) {
   requestQueue.add(() => echoAjax(data));
 }
+
+// FLYTTAD FRÅN MAIN.JS: Tagg-uppdatering hantering
+export const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
+  const ajaxData = {
+    action: "updateTags",
+    entityType,
+    entityId,
+    tags: newTags,
+    oldTags
+  };
+  queuedEchoAjax(ajaxData);
+  console.log('Tags AJAX sent:', ajaxData);
+};
