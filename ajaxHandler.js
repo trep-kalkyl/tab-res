@@ -63,66 +63,7 @@ export function showUserError(message) {
   setTimeout(() => errorDiv.style.display = 'none', 5000);
 }
 
-// Global project reference - sätts från main.js
-let globalProject = null;
-
-/**
- * Sätter global projekt-referens för att kunna beräkna totaler
- * Denna funktion ska kallas från main.js efter att projekt-data är initialiserad
- */
-export function setGlobalProject(project) {
-  globalProject = project;
-}
-
-/**
- * Beräknar aktuella projekt-totaler
- * Använder befintliga funktioner från projectCalcUtils.js
- */
-function calculateProjectTotals() {
-  if (!globalProject) {
-    console.warn('Global project not set, cannot calculate totals');
-    return {
-      totalMaterialCost: 0,
-      totalWorkTime: 0
-    };
-  }
-
-  // Beräkna aktuella totaler (utan att modifiera originaldatan)
-  let totalMaterialCost = 0;
-  let totalWorkTime = 0;
-
-  if (globalProject.prt_parts) {
-    globalProject.prt_parts.forEach(part => {
-      totalMaterialCost += Number(part.prt_material_user_price_total) || 0;
-      totalWorkTime += Number(part.prt_work_task_duration_total) || 0;
-    });
-  }
-
-  return {
-    totalMaterialCost: totalMaterialCost,
-    totalWorkTime: totalWorkTime
-  };
-}
-
-/**
- * Utökar AJAX-data med projekt-totaler
- * Lägger automatiskt till aktuella totaler till varje request
- */
-function enrichWithProjectTotals(data) {
-  const totals = calculateProjectTotals();
-  
-  return {
-    ...data,
-    // Lägg till projekt-totaler
-    projectTotals: {
-      totalMaterialCost: totals.totalMaterialCost,
-      totalWorkTime: totals.totalWorkTime,
-      timestamp: new Date().toISOString()
-    }
-  };
-}
-
-// Säker AJAX-funktion (uppdaterad för att inkludera totaler)
+// Säker AJAX-funktion
 export function echoAjax(data, retryCount = 0) {
   // Rate limiting check
   if (!rateLimiter.canMakeRequest()) {
@@ -136,13 +77,8 @@ export function echoAjax(data, retryCount = 0) {
     return Promise.reject(new Error('Invalid data - missing action'));
   }
 
-  // Utöka data med projekt-totaler
-  const enrichedData = enrichWithProjectTotals(data);
-
   const maxRetries = 2;
   const timeout = 5000; // 5 sekunder
-
-  console.log("Sending AJAX with project totals:", enrichedData);
 
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
@@ -151,7 +87,7 @@ export function echoAjax(data, retryCount = 0) {
     fetch('https://echo.free.beeceptor.com', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(enrichedData) // Skicka utökad data
+      body: JSON.stringify(data) // Skicka all data direkt
     })
     .then(res => {
       clearTimeout(timeoutId);
@@ -159,7 +95,7 @@ export function echoAjax(data, retryCount = 0) {
       return res.json();
     })
     .then(res => {
-      console.log("Echo response with totals:", res);
+      console.log("Echo response:", res);
       resolve(res);
     })
     .catch(err => {
@@ -185,7 +121,7 @@ export function queuedEchoAjax(data) {
   requestQueue.add(() => echoAjax(data));
 }
 
-// FLYTTAD FRÅN MAIN.JS: Tagg-uppdatering hantering (uppdaterad med totaler)
+// FLYTTAD FRÅN MAIN.JS: Tagg-uppdatering hantering
 export const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
   const ajaxData = {
     action: "updateTags",
@@ -195,25 +131,5 @@ export const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => 
     oldTags
   };
   queuedEchoAjax(ajaxData);
-  console.log('Tags AJAX sent with project totals:', ajaxData);
+  console.log('Tags AJAX sent:', ajaxData);
 };
-
-/**
- * Manuell funktion för att trigga projekt-totaler update
- * Kan användas när du vill skicka bara totaler utan annan data
- */
-export function sendProjectTotalsUpdate(reason = "manual_update") {
-  const ajaxData = {
-    action: "updateProjectTotals",
-    reason: reason
-  };
-  queuedEchoAjax(ajaxData);
-  console.log('Project totals update sent:', ajaxData);
-}
-
-/**
- * Utility-funktion för att få aktuella totaler (för debugging eller UI)
- */
-export function getCurrentProjectTotals() {
-  return calculateProjectTotals();
-}
