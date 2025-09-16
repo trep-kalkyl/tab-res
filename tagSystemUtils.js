@@ -6,9 +6,6 @@
  * with external ItemManager, CalculatorService, etc.
  */
 
-// Import för AJAX-hantering
-import * as ajaxHandler from "./ajaxHandler.js";
-
 class TagSystemUtils {
   constructor() {
     this.debugMode = false;
@@ -639,22 +636,6 @@ editorBox.appendChild(buttonContainer);
   getPlaintextMode() { return this.plaintextMode; }
 }
 
-// ======= TAG HANDLERS =======
-/**
- * Hanterar uppdatering av taggar via AJAX
- */
-const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
-  const ajaxData = {
-    action: "updateTags",
-    entityType,
-    entityId,
-    tags: newTags,
-    oldTags
-  };
-  ajaxHandler.queuedEchoAjax(ajaxData);
-  console.log('Tags AJAX sent:', ajaxData);
-};
-
 /**
  * Adds a tag column to a Tabulator table for the specified entity type.
  * - Patches getAllUniqueTags to use correct field
@@ -761,5 +742,4 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
 }
 
 // Endast nödvändiga exports
-export { handleTagUpdate };
 export default TagSystemUtils;
