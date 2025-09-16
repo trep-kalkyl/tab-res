@@ -4,8 +4,8 @@ import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa9
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
-import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2465e492205567c222f7d0b4c9a5f7cfe0f306c1/tagSystemUtils.js";
-import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@edd60d1c42de34265b64f48c77a4b577404e05fa/commentSystem.js";
+import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@5769333c6df2eab8b457c625d5e0a10ea368579d/tagSystemUtils.js";
+import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@88c9adac5d37273f453a98392476a1cda6bb9654/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js"; 
 import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
 import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
@@ -140,42 +140,6 @@ let commentsModule = null;
 // ======= INIT =======
 calcUtils.updateAllData(project);
 project.prt_parts?.forEach(p => { p.selected = p.selected ?? true; });
-
-// ======= KOMMENTARER =======
-const handleCommentUpdate = (entityType, rowData, fieldName, newComment) => {
-  let ajaxData = {
-    action: "updateComment",
-    entityType,
-    fieldName,
-    comment: newComment
-  };
-  switch (entityType) {
-    case 'part':
-      ajaxData.prt_id = rowData.prt_id; ajaxData.prt_name = rowData.prt_name; break;
-    case 'item':
-      ajaxData.itm_id = rowData.itm_id; ajaxData.itm_name = rowData.itm_name; ajaxData.itm_prt_id = rowData.itm_prt_id; break;
-    case 'task':
-      ajaxData.tsk_id = rowData.tsk_id; ajaxData.tsk_name = rowData.tsk_name; ajaxData.tsk_itm_id = rowData.tsk_itm_id; break;
-  }
-  ajaxHandler.queuedEchoAjax(ajaxData);
-  console.log('Comment AJAX sent:', ajaxData);
-};
-
-const initCommentsModule = async () => {
-  try {
-    commentsModule = new TabulatorCommentsModule({
-      modalId: 'commentModal',
-      allowHtml: true,
-      maxCommentLength: 1000
-    });
-    await commentsModule.init();
-    commentsModule.setCommentUpdateCallback(handleCommentUpdate);
-    return commentsModule;
-  } catch (error) {
-    console.error('Failed to initialize comments module:', error);
-    return null;
-  }
-};
 
 // ======= TAGG-AJAX FUNKTIONER =======
 const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
