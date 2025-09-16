@@ -571,26 +571,6 @@ editorBox.appendChild(buttonContainer);
       rowData[tagField] = sanitizedTags;
       cell.getRow().update(rowData);
       // AJAX-hantering
-      if (handleTagUpdate && findPartById && findItemById && findTaskById) {
-        let entityId, entityTypeStr;
-        if (entityType === "part") {
-          entityId = rowData.prt_id;
-          entityTypeStr = "part";
-          const part = findPartById(project, entityId);
-          if (part) part.prt_tags = sanitizedTags || [];
-        } else if (entityType === "item") {
-          entityId = rowData.itm_id;
-          entityTypeStr = "item";
-          const item = findItemById(project, entityId);
-          if (item) item.itm_tags = sanitizedTags || [];
-        } else if (entityType === "task") {
-          entityId = rowData.tsk_id;
-          entityTypeStr = "task";
-          const task = findTaskById(project, entityId);
-          if (task) task.tsk_tags = sanitizedTags || [];
-        }
-        handleTagUpdate(entityTypeStr, entityId, sanitizedTags || [], oldTags);
-      }
       document.body.removeChild(overlay);
       document.removeEventListener("keydown", handleEscape);
     });
@@ -677,7 +657,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
         tagField,
         entityType,
         project,
-        handleTagUpdate,
+        null, // TA BORT handleTagUpdate här - kommer från editor wrapper
         tableUtils.findPartById,
         tableUtils.findItemById,
         tableUtils.findTaskById
@@ -713,6 +693,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
             const task = tableUtils.findTaskById(project, entityId);
             if (task) task.tsk_tags = newTags || [];
           }
+          // ENDA AJAX-anropet ska vara HÄR
           handleTagUpdate(entityTypeStr, entityId, newTags || [], oldTags);
           success(newTags);
         },
@@ -720,7 +701,7 @@ export function addTagsToTable(table, entityType = "item", project, handleTagUpd
         tagField,
         entityType,
         project,
-        handleTagUpdate,
+        null, // TA BORT handleTagUpdate här också
         tableUtils.findPartById,
         tableUtils.findItemById,
         tableUtils.findTaskById
