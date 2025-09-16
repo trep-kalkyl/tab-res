@@ -2,7 +2,7 @@
 import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d587c03c86ac06b263c941591935651ac0a1a0eb/projectCalcUtils.js";
 import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa909f041ec1778ed172a24de1d1d9ddab86921/uiHelpers.js";
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
-import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@9862307261c7302923533e523fb8c01caf332b7f/ajaxHandler.js";
+import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@25e40b10c2063f4e21e3fb9bfc113406e53fbb13/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
 import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@65267c0005554e094bf3035aabd0fafa315c88df/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@88c9adac5d37273f453a98392476a1cda6bb9654/commentSystem.js";
