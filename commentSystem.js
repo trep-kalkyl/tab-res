@@ -3,6 +3,9 @@
 // Clean text storage with HTML rendering in overlay only
 // ====================================
 
+// Import för AJAX-hantering
+import * as ajaxHandler from "./ajaxHandler.js";
+
 // CommentSanitizer med säker länkhantering
 class CommentSanitizer {
     // Lista över tillåtna HTML-taggar och attribut
@@ -832,6 +835,48 @@ class TabulatorCommentsModule {
     }
 }
 
+// ======= COMMENT HANDLERS =======
+/**
+ * Hanterar uppdatering av kommentarer via AJAX
+ */
+const handleCommentUpdate = (entityType, rowData, fieldName, newComment) => {
+  let ajaxData = {
+    action: "updateComment",
+    entityType,
+    fieldName,
+    comment: newComment
+  };
+  switch (entityType) {
+    case 'part':
+      ajaxData.prt_id = rowData.prt_id; ajaxData.prt_name = rowData.prt_name; break;
+    case 'item':
+      ajaxData.itm_id = rowData.itm_id; ajaxData.itm_name = rowData.itm_name; ajaxData.itm_prt_id = rowData.itm_prt_id; break;
+    case 'task':
+      ajaxData.tsk_id = rowData.tsk_id; ajaxData.tsk_name = rowData.tsk_name; ajaxData.tsk_itm_id = rowData.tsk_itm_id; break;
+  }
+  ajaxHandler.queuedEchoAjax(ajaxData);
+  console.log('Comment AJAX sent:', ajaxData);
+};
+
+/**
+ * Initialiserar kommentarsmodulen med standardkonfiguration
+ */
+const initCommentsModule = async () => {
+  try {
+    const commentsModule = new TabulatorCommentsModule({
+      modalId: 'commentModal',
+      allowHtml: true,
+      maxCommentLength: 1000
+    });
+    await commentsModule.init();
+    commentsModule.setCommentUpdateCallback(handleCommentUpdate);
+    return commentsModule;
+  } catch (error) {
+    console.error('Failed to initialize comments module:', error);
+    return null;
+  }
+};
+
 // Export för användning
 export {
     TabulatorCommentsModule,
@@ -839,7 +884,9 @@ export {
     CommentValidator,
     CommentSanitizer,
     TimestampManager,
-    CommentModalManager
+    CommentModalManager,
+    handleCommentUpdate,
+    initCommentsModule
 };
 
 // Fallback för äldre import-system
@@ -850,7 +897,9 @@ if (typeof module !== 'undefined' && module.exports) {
         CommentValidator,
         CommentSanitizer,
         TimestampManager,
-        CommentModalManager
+        CommentModalManager,
+        handleCommentUpdate,
+        initCommentsModule
     };
 }
 
@@ -862,4 +911,6 @@ if (typeof window !== 'undefined') {
     window.CommentSanitizer = CommentSanitizer;
     window.TimestampManager = TimestampManager;
     window.CommentModalManager = CommentModalManager;
+    window.handleCommentUpdate = handleCommentUpdate;
+    window.initCommentsModule = initCommentsModule;
 }
