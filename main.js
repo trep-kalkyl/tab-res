@@ -2,7 +2,7 @@
 import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d587c03c86ac06b263c941591935651ac0a1a0eb/projectCalcUtils.js";
 import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa909f041ec1778ed172a24de1d1d9ddab86921/uiHelpers.js";
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
-import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ede6ce639f16ee007a023700b617b4b64d6e2adf/ajaxHandler.js";
+import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@9862307261c7302923533e523fb8c01caf332b7f/ajaxHandler.js";
 import * as partColors from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@44be448b9cbc2cff2549fab8ece33944dd33ada1/partColors.js";
 import TagSystemUtils, { addTagsToTable } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@5769333c6df2eab8b457c625d5e0a10ea368579d/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@88c9adac5d37273f453a98392476a1cda6bb9654/commentSystem.js";
@@ -141,19 +141,6 @@ let commentsModule = null;
 calcUtils.updateAllData(project);
 project.prt_parts?.forEach(p => { p.selected = p.selected ?? true; });
 
-// ======= TAGG-AJAX FUNKTIONER =======
-const handleTagUpdate = (entityType, entityId, newTags, oldTags = []) => {
-  const ajaxData = {
-    action: "updateTags",
-    entityType,
-    entityId,
-    tags: newTags,
-    oldTags
-  };
-  ajaxHandler.queuedEchoAjax(ajaxData);
-  console.log('Tags AJAX sent:', ajaxData);
-};
-
 // ======= GEMENSAM KOLUMN =======
 const deleteColumn = (cellClick) => ({
   title: "", formatter: () => "🗑️", width: 50, hozAlign: "center", cellClick, headerSort: false
@@ -168,7 +155,7 @@ const getPartTableColumns = () => [
   { title: "Materialpris Tot", field: "prt_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Arbetstid Tot", field: "prt_work_task_duration_total", formatter: tableUtils.formatHours },
   ExportModule.getPartExportColumn({
-    exclude: ["selected", "prt_comments", "prt_tags", "_subTaskTable"] // Anpassa din exkluderingslista här!
+    exclude: ["selected", "prt_comments", "prt_tags", "_subTaskTable"]
   }),
   ...(commentsModule ? [commentsModule.createCommentColumn('part', 'prt_name', { width: 200, title: "Part Comments" })] : [])
 ];
@@ -199,19 +186,18 @@ const getItemTableColumns = () => [
   { title: "Arbetstid", field: "itm_work_task_duration", formatter: tableUtils.formatHours },
   { title: "Arbetstid Tot", field: "itm_work_task_duration_total", formatter: tableUtils.formatHours },
   ExportModule.getItemExportColumn({
-    exclude: ["selected", "itm_comments", "itm_tags", "_subTaskTable"] // Anpassa efter behov!
+    exclude: ["selected", "itm_comments", "itm_tags", "_subTaskTable"]
   }),
   ...(commentsModule ? [commentsModule.createCommentColumn('item', 'itm_name', { width: 200, title: "Item Comments" })] : [])
 ];
 
-// ======= TASK-TABLE KOLUMNER: ALLA tsk_-kolumner samlade =======
 const getTaskTableColumns = () => [
   deleteColumn((e, cell) => ItemManager.handleDeleteTask(project, cell.getRow().getData(), itemTable, subtableToggle.openItemRows)),
   { title: "Task-ID", field: "tsk_id", width: 70 },
   { title: "Task-namn", field: "tsk_name", editor: "input", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Quantity", field: "tsk_total_quantity", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
 
-  // ===== MATERIAL-LÄNK-KOLUMNER (AJAX-kopplade) =====
+  // Material-länk-kolumner
   {
     title: "Material Number",
     field: "tsk_material_number",
@@ -280,21 +266,19 @@ const getTaskTableColumns = () => [
     hozAlign: "center"
   },
 
-  // ===== SLUT MATERIAL-LÄNK-KOLUMNER =====
-
   { title: "Material Amount", field: "tsk_material_amount", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Material Price", field: "tsk_material_user_price", editor: mathExpressionEditor, cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Material Price Total", field: "tsk_material_user_price_total", ...tableUtils.formatMoney },
   { title: "Work Duration", field: "tsk_work_task_duration", editor: "number", cellEdited: (cell) => ItemManager.updateTaskCell(project, cell, itemTable, partTable) },
   { title: "Work Duration Total", field: "tsk_work_task_duration_total", formatter: tableUtils.formatHours },
 
-  // ===== EXPORT-KOLUMN FÖR TASK =====
   ExportModule.getTaskExportColumn({
-    exclude: ["tsk_comments", "tsk_tags"] // Anpassa efter behov!
+    exclude: ["tsk_comments", "tsk_tags"]
   }),
 
   ...(commentsModule ? [commentsModule.createCommentColumn('task', 'tsk_name', { width: 200, title: "Task Comments" })] : [])
 ];
+
 // ======= TABELLER =======
 const setupTables = async () => {
   if (!commentsModule) {
@@ -345,7 +329,7 @@ const setupTables = async () => {
             rowFormatter: (taskRow) => partColors.applyPartColorToRow(taskRow, partId)
           });
           row._subTaskTable = taskTable;
-          addTagsToTable(taskTable, "task", project, handleTagUpdate, tableUtils);
+          addTagsToTable(taskTable, "task", project, ajaxHandler.handleTagUpdate, tableUtils);
           if (commentsModule) {
             commentsModule.registerTable(`taskTable_${itm_id}`, taskTable);
           }
@@ -423,8 +407,8 @@ const initUI = async () => {
   await setupTables();
   waitForTables(["#part-table", "#item-table"])
     .then(([partTable, itemTable]) => {
-      addTagsToTable(partTable, "part", project, handleTagUpdate, tableUtils);
-      addTagsToTable(itemTable, "item", project, handleTagUpdate, tableUtils);
+      addTagsToTable(partTable, "part", project, ajaxHandler.handleTagUpdate, tableUtils);
+      addTagsToTable(itemTable, "item", project, ajaxHandler.handleTagUpdate, tableUtils);
     })
     .catch(err => console.warn("Tagg-init misslyckades:", err));
   const handlers = {
