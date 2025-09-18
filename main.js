@@ -469,7 +469,11 @@ const setupTables = async () => {
     rowFormatter: (row) =>
       partColors.applyPartColorToRow(row, row.getData().prt_id),
   });
-
+  partTable.on("dataFiltered", updateItemSummary);
+  partTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
+  partTable.on("cellEdited", updateItemSummary);
+  partTable.on("rowAdded", updateItemSummary);
+  partTable.on("rowDeleted", updateItemSummary);
   itemTable = new Tabulator("#item-table", {
     index: "itm_id",
     data: calcUtils.getAllItemsWithPartRef(project.prt_parts),
@@ -518,17 +522,19 @@ const setupTables = async () => {
               partColors.applyPartColorToRow(taskRow, partId),
           });
           // Koppla summeringsuppdatering till taskTable
+          taskTable.on("dataFiltered", updateItemSummary);
+          taskTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
           taskTable.on("cellEdited", updateItemSummary);
           taskTable.on("rowAdded", updateItemSummary);
           taskTable.on("rowDeleted", updateItemSummary);
           row._subTaskTable = taskTable;
-          addTagsToTable(
-            taskTable,
-            "task",
-            project,
-            ajaxHandler.handleTagUpdate,
-            tableUtils,
-          );
+          // addTagsToTable(
+          //  taskTable,
+          //  "task",
+          //   project,
+          //    ajaxHandler.handleTagUpdate,
+          //   tableUtils,
+          //  );
           if (commentsModule) {
             commentsModule.registerTable(`taskTable_${itm_id}`, taskTable);
           }
@@ -565,6 +571,7 @@ const setupTables = async () => {
 
   // ======= SUMMERINGSKOPPLINGAR FÖR ITEM =======
   itemTable.on("dataFiltered", updateItemSummary);
+  itemTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
   itemTable.on("cellEdited", updateItemSummary);
   itemTable.on("rowAdded", updateItemSummary);
   itemTable.on("rowDeleted", updateItemSummary);
@@ -671,13 +678,13 @@ const initUI = async () => {
   await setupTables();
   waitForTables(["#part-table", "#item-table"])
     .then(([partTable, itemTable]) => {
-      addTagsToTable(
-        partTable,
-        "part",
-        project,
-        ajaxHandler.handleTagUpdate,
-        tableUtils,
-      );
+      // addTagsToTable(
+      //    partTable,
+      //    "part",
+      //   project,
+      //   ajaxHandler.handleTagUpdate,
+      //   tableUtils,
+      // );
       addTagsToTable(
         itemTable,
         "item",
