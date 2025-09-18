@@ -1,5 +1,5 @@
 // ======= IMPORTS =======
-import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@cae437980b77dfa5b561124117c5a57ee3275e28/projectCalcUtils.js";
+import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ebb78b15f6eb682007c6c0d18b046efd39595c94/projectCalcUtils.js";
 import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa909f041ec1778ed172a24de1d1d9ddab86921/uiHelpers.js";
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@25e40b10c2063f4e21e3fb9bfc113406e53fbb13/ajaxHandler.js";
@@ -373,7 +373,20 @@ const getTaskTableColumns = () => [
       });
     },
   },
-  {title:"Stage", field:"tsk_construction_stage", editor:"input"},
+  {
+  title: "Stage",
+  field: "tsk_construction_stage",
+  editor: "input",
+  cellEdited: function (cell) {
+    const rowData = cell.getRow().getData();
+    ajaxHandler.queuedEchoAjax({
+      tsk_id: rowData.tsk_id,
+      field: "tsk_construction_stage",
+      value: rowData.tsk_construction_stage,
+      action: "updateTaskStageField",
+    });
+  },
+},
   {
     title: "Material Links",
     field: "tsk_material_link",
@@ -664,6 +677,40 @@ function updateItemSummary() {
       </div>
     `;
   }
+const stageSums = calcUtils.sumTotalsPerStage(filteredItems);
+
+// Bygg HTML-tabell
+let stageTable = `
+  <table style="margin-top:12px; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:2px 8px;">Stage</th>
+        <th style="text-align:right; padding:2px 8px;">Material</th>
+        <th style="text-align:right; padding:2px 8px;">Arbetstid</th>
+      </tr>
+    </thead>
+    <tbody>
+`;
+
+Object.entries(stageSums).forEach(([stage, sums]) => {
+  stageTable += `
+    <tr>
+      <td style="padding:2px 8px;">${stage}</td>
+      <td style="text-align:right; padding:2px 8px;">${sums.materialTotal}</td>
+      <td style="text-align:right; padding:2px 8px;">${sums.workTotal}</td>
+    </tr>
+  `;
+});
+
+stageTable += '</tbody></table>';
+
+// Lägg till i summary-diven
+summaryDiv.innerHTML += `
+  <div style="margin-top:8px;">
+    <strong>Fördelning per byggskede:</strong>
+    ${stageTable}
+  </div>
+`;
 }
 
 // ======= UI INIT =======
