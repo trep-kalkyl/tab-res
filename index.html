@@ -1,32 +1,97 @@
-<!-- TabulatorJS library (required for table functionality) -->
+<!-- TabulatorJS library -->
 <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
-
-<!-- TabulatorJS default stylesheet (for table styling) -->
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
 
-<!-- TabulatorCalculations helper -->
-<script src="https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@main/TabulatorCalculations.js"></script>
+<!-- Split.js CDN -->
+<script src="https://unpkg.com/split.js/dist/split.min.js"></script>
 
-<!-- FontAwesome 6.7.2 -->
+<!-- FontAwesome (icons for UI) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/fontawesome.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/solid.min.css">
 
-<!-- Prism.js core -->
+<!-- Prism.js (syntax highlighting) -->
 <link rel="stylesheet" href="https://unpkg.com/prismjs@1.29.0/themes/prism.css">
 <script src="https://unpkg.com/prismjs@1.29.0/prism.js"></script>
-<!-- Prism.js JSON syntax -->
 <script src="https://unpkg.com/prismjs@1.29.0/components/prism-json.min.js"></script>
 
-<div style="display: flex; gap: 40px;">
-  <div style="min-width: 350px;">
+<style>
+  #split-wrapper {
+    display: flex;
+    height: 80vh;
+    min-height: 400px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px #0002;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .gutter {
+    background: #e0e7ef;
+    cursor: col-resize;
+    width: 8px;
+    min-width: 8px;
+    margin: 0;
+    z-index: 10;
+    border-left: 1px solid #cfd8dc;
+    border-right: 1px solid #cfd8dc;
+    transition: background 0.2s;
+  }
+  .gutter:hover {
+    background: #b0bec5;
+  }
+  #parts-pane, #items-pane {
+    overflow: auto;
+    padding: 0 12px 0 0;
+    background: #fff;
+    box-sizing: border-box;
+    height: 100%;
+    min-width: 250px;
+  }
+  #parts-pane {
+    min-width: 320px;
+    max-width: 600px;
+  }
+  #items-pane {
+    min-width: 400px;
+    flex: 1;
+  }
+  @media (max-width: 900px) {
+    #parts-pane { min-width: 140px; }
+    #items-pane { min-width: 220px; }
+    #split-wrapper { flex-direction: column; height: auto; }
+    .gutter { cursor: row-resize; height: 8px; width: auto; }
+  }
+</style>
+
+<div id="split-wrapper">
+  <div id="parts-pane">
     <h3>Delar (Parts)</h3>
     <div id="part-table"></div>
   </div>
-  <div style="min-width: 800px; flex: 1;">
+  <div id="items-pane">
     <h3>Poster (Items)</h3>
     <div id="item-table"></div>
   </div>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    Split(['#parts-pane', '#items-pane'], {
+      sizes: [30, 70],
+      minSize: [320, 400],
+      gutterSize: 8,
+      cursor: 'col-resize',
+      gutter: function (index, direction) {
+        const gutter = document.createElement('div');
+        gutter.className = 'gutter';
+        return gutter;
+      }
+    });
+  });
+</script>
+<!-- Lägg till denna under item-table -->
+<div id="item-summary" class="item-summary"></div>
+
 <!-- Links Modal Template -->
 <div class="tab-modal-overlay" id="linksModal" style="display: none;" role="dialog" aria-labelledby="modalLinksTitle" aria-modal="true">
     <div class="tab-modal-content">
