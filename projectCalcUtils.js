@@ -216,3 +216,17 @@ export function getSelectedPartIds(parts) {
   if (DEBUG) console.log("[getSelectedPartIds][OUT]", { count: selected.length });
   return selected;
 }
+
+/**
+ * Beräknar summerad material- och arbetstid för ett Item-array (t.ex. filtrerat från Tabulator).
+ * @param {Array} items - Array av item-objekt
+ * @returns {Object} { materialTotal, workTotal }
+ */
+export function sumItemTotals(items) {
+  let materialTotal = 0, workTotal = 0;
+  (items || []).forEach(item => {
+    materialTotal += Number(item.itm_material_user_price_total) || 0;
+    workTotal    += Number(item.itm_work_task_duration_total) || 0;
+  });
+  return { materialTotal, workTotal };
+}
