@@ -30,7 +30,6 @@ const data = [
         prt_id: 1,
         prt_prj_id: 1,
         prt_name: "Frame",
-        prt_tags: ["structure", "wood"],
         prt_comments: [
           {
             text: "Frame work börjar nästa vecka. Se ritningar på <strong>www.buildplans.com</strong>",
@@ -59,14 +58,13 @@ const data = [
                 tsk_total_quantity: 10,
                 tsk_work_task_duration: 1,
                 tsk_material_amount: 10,
-                tsk_material_user_price: 3,
-                tsk_tags: ["cutting", "tool"],
                 tsk_comments: [
                   {
                     text: "Använd <strong>skyddsutrustning</strong>! Safety first.",
                     timestamp: "2024-12-01 12:00",
                   },
-                ],
+                                  ],
+                                  tsk_construction_stage: "Elkomplettering",
               },
               {
                 tsk_id: 1112,
@@ -76,8 +74,8 @@ const data = [
                 tsk_work_task_duration: 0.5,
                 tsk_material_amount: 2,
                 tsk_material_user_price: 1,
-                tsk_tags: ["df", "logistics"],
                 tsk_comments: [],
+                tsk_construction_stage: "Elkanalisation",
               },
             ],
           },
@@ -87,7 +85,6 @@ const data = [
         prt_id: 2,
         prt_prj_id: 1,
         prt_name: "Roof",
-        prt_tags: ["covering", "weather"],
         prt_comments: [],
         prt_items: [
           {
@@ -112,8 +109,8 @@ const data = [
                 tsk_work_task_duration: 0.2,
                 tsk_material_amount: 1,
                 tsk_material_user_price: 6,
-                tsk_tags: ["installation", "manual"],
                 tsk_comments: [],
+                tsk_construction_stage: "Elkomplettering"
               },
               {
                 tsk_id: 1212,
@@ -123,8 +120,8 @@ const data = [
                 tsk_work_task_duration: 0.05,
                 tsk_material_amount: 0.5,
                 tsk_material_user_price: 2,
-                tsk_tags: ["quality", "check"],
                 tsk_comments: [],
+                tsk_construction_stage: "Eldriftsättning"
               },
             ],
           },
@@ -376,6 +373,7 @@ const getTaskTableColumns = () => [
       });
     },
   },
+  {title:"Stage", field:"tsk_construction_stage", editor:"input"},
   {
     title: "Material Links",
     field: "tsk_material_link",
@@ -532,7 +530,7 @@ const setupTables = async () => {
           //  taskTable,
           //  "task",
           //   project,
-          //    ajaxHandler.handleTagUpdate,
+          //   ajaxHandler.handleTagUpdate,
           //   tableUtils,
           //  );
           if (commentsModule) {
@@ -570,8 +568,7 @@ const setupTables = async () => {
   }
 
   // ======= SUMMERINGSKOPPLINGAR FÖR ITEM =======
-  itemTable.on("dataFiltered", updateItemSummary);
-  itemTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
+itemTable.on("dataFiltered", () => setTimeout(updateItemSummary, 0));
   itemTable.on("cellEdited", updateItemSummary);
   itemTable.on("rowAdded", updateItemSummary);
   itemTable.on("rowDeleted", updateItemSummary);
@@ -608,8 +605,6 @@ const applyPartFilter = () => {
   };
   itemTable.setFilter(combinedFilter);
 
-  // Uppdatera summeringen när part-filter ändras
-  updateItemSummary();
 };
 
 const updatePartOptions = () => {
@@ -685,14 +680,24 @@ const initUI = async () => {
       //   ajaxHandler.handleTagUpdate,
       //   tableUtils,
       // );
-      addTagsToTable(
-        itemTable,
-        "item",
-        project,
-        ajaxHandler.handleTagUpdate,
-        tableUtils,
-      );
+addTagsToTable(
+  itemTable,
+  "item",
+  project,
+  ajaxHandler.handleTagUpdate,
+  tableUtils,
+);
+
+// Koppla summering och filtrering till taggfilter-logiken (rätt event)
+itemTable.on("headerFilterChanged", () => {
+  const tagUtils = window.__tagUtils?.["item-table"];
+  itemsTagFilter = tagUtils?.getCurrentFilter() || [];
+  applyPartFilter(); // Filtrera items
+});
+// Summera alltid när Tabulator filtrerat klart (oavsett filterkälla!)
+itemTable.on("dataFiltered", updateItemSummary);
     })
+
     .catch((err) => console.warn("Tagg-init misslyckades:", err));
   const handlers = {
     "redraw-items-btn": () => itemTable.redraw(true),
