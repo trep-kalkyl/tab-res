@@ -233,17 +233,17 @@ export function sumItemTotals(items) {
 
 /**
  * Summerar materialkostnad och arbetstid per construction stage bland ett array av items.
- * @param {Array} items - Array av item-objekt.
- * @returns {Object} { [stageName]: { materialTotal, workTotal } }
+ * Multiplicerar varje task-värde med item.itm_quantity för korrekt totalsumma.
  */
 export function sumTotalsPerStage(items) {
   const stageSums = {};
   (items || []).forEach(item => {
+    const itemQuantity = Number(item.itm_quantity) || 0;
     (item.itm_tasks || []).forEach(task => {
       const stage = task.tsk_construction_stage || 'Okänd';
       if (!stageSums[stage]) stageSums[stage] = { materialTotal: 0, workTotal: 0 };
-      stageSums[stage].materialTotal += Number(task.tsk_material_user_price_total) || 0;
-      stageSums[stage].workTotal    += Number(task.tsk_work_task_duration_total) || 0;
+      stageSums[stage].materialTotal += (Number(task.tsk_material_user_price_total) || 0) * itemQuantity;
+      stageSums[stage].workTotal    += (Number(task.tsk_work_task_duration_total) || 0) * itemQuantity;
     });
   });
   return stageSums;
