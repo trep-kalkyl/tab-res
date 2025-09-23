@@ -469,42 +469,41 @@ const setupTables = async () => {
 
   MaterialLinksModule.init();
 
+  // === STEG 1: Skapa footern innan Tabulator ===
+  const partFooter = document.createElement("div");
+  partFooter.style.display = "flex";
+  partFooter.style.justifyContent = "flex-end";
+  partFooter.style.alignItems = "center";
+  partFooter.style.gap = "12px";
+  partFooter.style.position = "relative";
+
+  const addBtn = document.createElement("button");
+  addBtn.className = "tab-modal-btn tab-modal-confirm";
+  addBtn.textContent = "Lägg till Part";
+  addBtn.onclick = () => ItemManager.addPartRow(
+    project,
+    partTable,
+    itemTable,
+    updatePartOptions,
+    applyPartFilter
+  );
+  partFooter.appendChild(addBtn);
+
 partTable = new Tabulator("#part-table", {
   index: "prt_id",
   data: project.prt_parts || [],
   layout: "fitDataFill",
   columns: getPartTableColumns(),
-  footerElement: (() => {
-    // Skapa en flexbox-footer med både add och kolumnkontroll-knapp
-    const footer = document.createElement("div");
-    footer.style.display = "flex";
-    footer.style.justifyContent = "flex-end";
-    footer.style.alignItems = "center";
-    footer.style.gap = "12px";
-    footer.style.position = "relative";
-
-    // Lägg till "Lägg till Part"-knapp
-    const addBtn = document.createElement("button");
-    addBtn.className = "tab-modal-btn tab-modal-confirm";
-    addBtn.textContent = "Lägg till Part";
-    addBtn.onclick = () => ItemManager.addPartRow(
-      project,
-      partTable,
-      itemTable,
-      updatePartOptions,
-      applyPartFilter
-    );
-    footer.appendChild(addBtn);
-
-    // Lägg till kolumnkontroll-knapp
-    const partColumnControls = new ColumnControls(partTable, { buttonText: "Kolumner" });
-    footer.appendChild(partColumnControls.button);
-
-    return footer;
-  })(),
+footerElement: partFooter, // <-- använd footern här
   rowFormatter: (row) =>
     partColors.applyPartColorToRow(row, row.getData().prt_id),
 });
+partTable.on("tableBuilt", () => {
+  const partColumnControls = new ColumnControls(partTable, { buttonText: "Kolumner" });
+  partFooter.appendChild(partColumnControls.button);
+});
+
+
   partTable.on("dataFiltered", updateItemSummary);
   partTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
   partTable.on("cellEdited", updateItemSummary);
