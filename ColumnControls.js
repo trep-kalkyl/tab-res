@@ -3,14 +3,12 @@
  * Ultra-lightweight column visibility control for Tabulator.js v6+
  * Modern ES6 module, no dependencies.
  * Usage: import and instantiate per Tabulator instance.
- *
- * API:
- *   new ColumnControls(tabulatorInstance, { buttonText: "Kolumner" })
- *   .destroy() // cleanup
- *   .toggle()  // toggle menu
- *
- * Excludes internal fields automatically (delete, toggleSubtable, export etc).
- * Styling can be customized via .cc-btn, .cc-menu, .cc-item classes.
+ * 
+ * Usage example:
+ *   import { ColumnControls } from "./ColumnControls.js";
+ *   const cc = new ColumnControls(tabulatorInstance, { buttonText: "Kolumner" });
+ *   // Place cc.button wherever in DOM (e.g. footer)
+ *   // The menu will be managed automatically.
  */
 
 export class ColumnControls {
@@ -30,7 +28,7 @@ export class ColumnControls {
     this.menu = document.createElement("div");
     this.menu.className = "cc-menu";
     this.menu.style.display = "none";
-    this.menu.style.position = "absolute";
+    this.menu.style.position = "fixed";
     this.menu.style.zIndex = 9999;
     this.menu.setAttribute("role", "menu");
 
@@ -83,33 +81,27 @@ export class ColumnControls {
     // Build menu content on open
     this.button.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.toggle();
+      this.renderMenu();
+      if (this.menu.style.display === "block") {
+        this.close();
+      } else {
+        this.openMenuBelowButton();
+      }
     });
 
     // Hide menu when clicking outside
     this._outsideHandler = (e) => {
-      if (!this.menu.contains(e.target) && e.target !== this.button) {
+      if (
+        this.menu.style.display === "block" &&
+        !this.menu.contains(e.target) &&
+        e.target !== this.button
+      ) {
         this.close();
       }
     };
     document.addEventListener("click", this._outsideHandler);
 
-    // Place menu (fixed, under button)
-    this.button.addEventListener("click", () => {
-      if (this.menu.style.display === "block") {
-        this.close();
-        return;
-      }
-      this.renderMenu();
-      // Position menu below button
-      const rect = this.button.getBoundingClientRect();
-      this.menu.style.top = (rect.bottom + 4 + window.scrollY) + "px";
-      this.menu.style.left = (rect.left + window.scrollX) + "px";
-    });
-
-    // Expose for easy DOM placement
-    // Usage: container.appendChild(columnControls.button)
-    //        document.body.appendChild(columnControls.menu)
+    // Place menu in body (not inside footer, to avoid overflow/hidden bugs)
     document.body.appendChild(this.menu);
   }
 
@@ -129,20 +121,23 @@ export class ColumnControls {
     const columns = this.table.getColumns();
     columns.forEach((col, idx) => {
       const def = col.getDefinition();
-      const field = col.getField?.(); // may be undefined for non-data columns
-
-      // Internal/excluded columns
-      const excludeFields = [
-        "toggleSubtable",
-        "item_export",
-        "part_export",
-        "task_export",
-        "prt_comments", "itm_comments", "tsk_comments",
-        "prt_tags", "itm_tags", "tsk_tags",
-        "selected", // markerad
-        "" // no field
-      ];
-      // Hide for first column (often delete or toggle)
+      const field = typeof col.getField === "function"
+        ? col.getField()
+        : def.field;
+      // Exclude: first column (commonly delete/toggle), export columns, tag/comment fields, and utility fields
+      const excludeFields =
+        [
+          "toggleSubtable",
+          "item_export",
+          "part_export",
+          "task_export",
+          "prt_comments", "itm_comments", "tsk_comments",
+          "prt_tags", "itm_tags", "tsk_tags",
+          "selected",
+          "",
+          null,
+          undefined,
+        ];
       if (!field || excludeFields.includes(field) || idx === 0) return;
 
       // UI
@@ -164,13 +159,26 @@ export class ColumnControls {
   }
 
   /**
+   * Open the menu below the button with correct position.
+   */
+  openMenuBelowButton() {
+    this.menu.style.display = "block";
+    // Position menu below button
+    const rect = this.button.getBoundingClientRect();
+    this.menu.style.top = (rect.bottom + 4 + window.scrollY) + "px";
+    this.menu.style.left = (rect.left + window.scrollX) + "px";
+    this.menu.style.minWidth = rect.width + "px";
+  }
+
+  /**
    * Toggle menu dropdown open/close.
    */
   toggle() {
     if (this.menu.style.display === "block") {
       this.close();
     } else {
-      this.menu.style.display = "block";
+      this.renderMenu();
+      this.openMenuBelowButton();
     }
   }
 
