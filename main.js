@@ -1,5 +1,5 @@
 // ======= IMPORTS =======
-import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@ebb78b15f6eb682007c6c0d18b046efd39595c94/projectCalcUtils.js";
+import * as calcUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@b9b56ea20586d7278411d8e9e3371718335e75b1/projectCalcUtils.js";
 import * as uiHelpers from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@afa909f041ec1778ed172a24de1d1d9ddab86921/uiHelpers.js";
 import * as subtableToggle from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@229107bdd0fe8badb9cfc4b3280711a216246af8/subtableToggle.js";
 import * as ajaxHandler from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@25e40b10c2063f4e21e3fb9bfc113406e53fbb13/ajaxHandler.js";
@@ -13,6 +13,7 @@ import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91
 import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
 import { mathExpressionEditor } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2cbad2a1e5793822760906fc1b44c489b3b03b20/mathExpressionEditor.js";
 import * as ExportModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@06e5ba13188cf37f5336ccbb0246c9c5f2909a17/ExportModule.js";
+import { ColumnControls } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@8e57257bbaeac46b54cb7312936759f53756dc6b/ColumnControls.js";
 
 // ======= EXEMPELDATA (uppdaterad med nya tagg-fält och kommentarsfält) =======
 const data = [
@@ -135,6 +136,11 @@ const project = data[0];
 let partTable = null;
 let itemTable = null;
 let commentsModule = null;
+
+// --- Debounce for project totals AJAX ---
+let ajaxTotalsDebounceTimer = null;
+let lastSentMaterial = null;
+let lastSentWork = null;
 
 // ======= INIT =======
 calcUtils.updateAllData(project);
@@ -463,23 +469,42 @@ const setupTables = async () => {
 
   MaterialLinksModule.init();
 
-  partTable = new Tabulator("#part-table", {
-    index: "prt_id",
-    data: project.prt_parts || [],
-    layout: "fitDataFill",
-    columns: getPartTableColumns(),
-    footerElement: uiHelpers.createFooterButton("Lägg till Part", () =>
-      ItemManager.addPartRow(
-        project,
-        partTable,
-        itemTable,
-        updatePartOptions,
-        applyPartFilter,
-      ),
-    ),
-    rowFormatter: (row) =>
-      partColors.applyPartColorToRow(row, row.getData().prt_id),
-  });
+partTable = new Tabulator("#part-table", {
+  index: "prt_id",
+  data: project.prt_parts || [],
+  layout: "fitDataFill",
+  columns: getPartTableColumns(),
+  footerElement: (() => {
+    // Skapa en flexbox-footer med både add och kolumnkontroll-knapp
+    const footer = document.createElement("div");
+    footer.style.display = "flex";
+    footer.style.justifyContent = "flex-end";
+    footer.style.alignItems = "center";
+    footer.style.gap = "12px";
+    footer.style.position = "relative";
+
+    // Lägg till "Lägg till Part"-knapp
+    const addBtn = document.createElement("button");
+    addBtn.className = "tab-modal-btn tab-modal-confirm";
+    addBtn.textContent = "Lägg till Part";
+    addBtn.onclick = () => ItemManager.addPartRow(
+      project,
+      partTable,
+      itemTable,
+      updatePartOptions,
+      applyPartFilter
+    );
+    footer.appendChild(addBtn);
+
+    // Lägg till kolumnkontroll-knapp
+    const partColumnControls = new ColumnControls(partTable, { buttonText: "Kolumner" });
+    footer.appendChild(partColumnControls.button);
+
+    return footer;
+  })(),
+  rowFormatter: (row) =>
+    partColors.applyPartColorToRow(row, row.getData().prt_id),
+});
   partTable.on("dataFiltered", updateItemSummary);
   partTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
   partTable.on("cellEdited", updateItemSummary);
@@ -662,6 +687,21 @@ function updateItemSummary() {
   // Totalsumma för hela projektet
   const totalMaterial = project.prj_material_user_price_total || 0;
   const totalWork = project.prj_work_task_duration_total || 0;
+
+// Debounced AJAX: Only send totals if values changed and after 300ms quiet period
+if (ajaxTotalsDebounceTimer) clearTimeout(ajaxTotalsDebounceTimer);
+ajaxTotalsDebounceTimer = setTimeout(() => {
+  if (totalMaterial !== lastSentMaterial || totalWork !== lastSentWork) {
+    ajaxHandler.queuedEchoAjax({
+      action: "updateProjectTotals",
+      prj_id: project.prj_id,
+      material_total: totalMaterial,
+      work_total: totalWork,
+    });
+    lastSentMaterial = totalMaterial;
+    lastSentWork = totalWork;
+  }
+}, 300);
 
   // Skriv ut summeringen i HTML
   const summaryDiv = document.getElementById("item-summary");
