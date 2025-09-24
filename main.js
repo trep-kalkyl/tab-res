@@ -584,6 +584,11 @@ footerElement: taskFooter,
             rowFormatter: (taskRow) =>
               partColors.applyPartColorToRow(taskRow, partId),
           });
+
+          taskTable.on("tableBuilt", () => {
+  const taskColumnControls = new ColumnControls(taskTable, { buttonText: "Kolumner" });
+  taskFooter.appendChild(taskColumnControls.button);
+});
           // Koppla summeringsuppdatering till taskTable
           taskTable.on("dataFiltered", updateItemSummary);
           taskTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
@@ -621,11 +626,6 @@ footerElement: taskFooter,
       subtableToggle.restoreToggleState(row);
     },
   });
-
-taskTable.on("tableBuilt", () => {
-  const taskColumnControls = new ColumnControls(taskTable, { buttonText: "Kolumner" });
-  taskFooter.appendChild(taskColumnControls.button);
-});
 
   itemTable.on("tableBuilt", () => {
     const itemColumnControls = new ColumnControls(itemTable, {
