@@ -64,8 +64,8 @@ const data = [
                     text: "Använd <strong>skyddsutrustning</strong>! Safety first.",
                     timestamp: "2024-12-01 12:00",
                   },
-                                  ],
-                                  tsk_construction_stage: "Elkomplettering",
+                ],
+                tsk_construction_stage: "Elkomplettering",
               },
               {
                 tsk_id: 1112,
@@ -111,7 +111,7 @@ const data = [
                 tsk_material_amount: 1,
                 tsk_material_user_price: 6,
                 tsk_comments: [],
-                tsk_construction_stage: "Elkomplettering"
+                tsk_construction_stage: "Elkomplettering",
               },
               {
                 tsk_id: 1212,
@@ -122,7 +122,7 @@ const data = [
                 tsk_material_amount: 0.5,
                 tsk_material_user_price: 2,
                 tsk_comments: [],
-                tsk_construction_stage: "Eldriftsättning"
+                tsk_construction_stage: "Eldriftsättning",
               },
             ],
           },
@@ -380,19 +380,19 @@ const getTaskTableColumns = () => [
     },
   },
   {
-  title: "Stage",
-  field: "tsk_construction_stage",
-  editor: "input",
-  cellEdited: function (cell) {
-    const rowData = cell.getRow().getData();
-    ajaxHandler.queuedEchoAjax({
-      tsk_id: rowData.tsk_id,
-      field: "tsk_construction_stage",
-      value: rowData.tsk_construction_stage,
-      action: "updateTaskStageField",
-    });
+    title: "Stage",
+    field: "tsk_construction_stage",
+    editor: "input",
+    cellEdited: function (cell) {
+      const rowData = cell.getRow().getData();
+      ajaxHandler.queuedEchoAjax({
+        tsk_id: rowData.tsk_id,
+        field: "tsk_construction_stage",
+        value: rowData.tsk_construction_stage,
+        action: "updateTaskStageField",
+      });
+    },
   },
-},
   {
     title: "Material Links",
     field: "tsk_material_link",
@@ -480,50 +480,65 @@ const setupTables = async () => {
   const addBtn = document.createElement("button");
   addBtn.className = "tab-modal-btn tab-modal-confirm";
   addBtn.textContent = "Lägg till Part";
-  addBtn.onclick = () => ItemManager.addPartRow(
-    project,
-    partTable,
-    itemTable,
-    updatePartOptions,
-    applyPartFilter
-  );
+  addBtn.onclick = () =>
+    ItemManager.addPartRow(
+      project,
+      partTable,
+      itemTable,
+      updatePartOptions,
+      applyPartFilter,
+    );
   partFooter.appendChild(addBtn);
 
-partTable = new Tabulator("#part-table", {
-  index: "prt_id",
-  data: project.prt_parts || [],
-  layout: "fitDataFill",
-  columns: getPartTableColumns(),
-footerElement: partFooter, // <-- använd footern här
-  rowFormatter: (row) =>
-    partColors.applyPartColorToRow(row, row.getData().prt_id),
-});
-partTable.on("tableBuilt", () => {
-  const partColumnControls = new ColumnControls(partTable, { buttonText: "Kolumner" });
-  partFooter.appendChild(partColumnControls.button);
-});
-
+  partTable = new Tabulator("#part-table", {
+    index: "prt_id",
+    data: project.prt_parts || [],
+    layout: "fitDataFill",
+    columns: getPartTableColumns(),
+    footerElement: partFooter, // <-- använd footern här
+    rowFormatter: (row) =>
+      partColors.applyPartColorToRow(row, row.getData().prt_id),
+  });
+  partTable.on("tableBuilt", () => {
+    const partColumnControls = new ColumnControls(partTable, {
+      buttonText: "Kolumner",
+    });
+    partFooter.appendChild(partColumnControls.button);
+  });
 
   partTable.on("dataFiltered", updateItemSummary);
   partTable.on("headerFilterChanged", updateItemSummary); // VIKTIG!
   partTable.on("cellEdited", updateItemSummary);
   partTable.on("rowAdded", updateItemSummary);
   partTable.on("rowDeleted", updateItemSummary);
+
+  const itemFooter = document.createElement("div");
+  itemFooter.style.display = "flex";
+  itemFooter.style.justifyContent = "flex-end";
+  itemFooter.style.alignItems = "center";
+  itemFooter.style.gap = "12px";
+  itemFooter.style.position = "relative";
+
+  const addItemBtn = document.createElement("button");
+  addItemBtn.className = "tab-modal-btn tab-modal-confirm";
+  addItemBtn.textContent = "Lägg till Item";
+  addItemBtn.onclick = () =>
+    ItemManager.addItemRow(
+      project,
+      itemTable,
+      partTable,
+      updatePartOptions,
+      applyPartFilter,
+      subtableToggle.openItemRows,
+    );
+  itemFooter.appendChild(addItemBtn);
+
   itemTable = new Tabulator("#item-table", {
     index: "itm_id",
     data: calcUtils.getAllItemsWithPartRef(project.prt_parts),
     layout: "fitDataFill",
     columns: getItemTableColumns(),
-    footerElement: uiHelpers.createFooterButton("Lägg till Item", () =>
-      ItemManager.addItemRow(
-        project,
-        itemTable,
-        partTable,
-        updatePartOptions,
-        applyPartFilter,
-        subtableToggle.openItemRows,
-      ),
-    ),
+    footerElement: itemFooter, // <-- NYTT!
     rowFormatter: (row) => {
       const d = row.getData(),
         itm_id = d.itm_id,
@@ -540,19 +555,32 @@ partTable.on("tableBuilt", () => {
         if ((d.itm_tasks || []).length) {
           const taskDiv = document.createElement("div");
           holderEl.appendChild(taskDiv);
+          
+          // Skapa footer för varje taskTable
+const taskFooter = document.createElement("div");
+taskFooter.style.display = "flex";
+taskFooter.style.justifyContent = "flex-end";
+taskFooter.style.alignItems = "center";
+taskFooter.style.gap = "12px";
+taskFooter.style.position = "relative";
+
+const addTaskBtn = document.createElement("button");
+addTaskBtn.className = "tab-modal-btn tab-modal-confirm";
+addTaskBtn.textContent = "Lägg till Task";
+addTaskBtn.onclick = () => ItemManager.addTaskRow(
+  project,
+  d,
+  itemTable,
+  subtableToggle.openItemRows,
+);
+taskFooter.appendChild(addTaskBtn);
+          
           const taskTable = new Tabulator(taskDiv, {
             index: "tsk_id",
             data: d.itm_tasks,
             layout: "fitDataFill",
             columns: getTaskTableColumns(),
-            footerElement: uiHelpers.createFooterButton("Lägg till Task", () =>
-              ItemManager.addTaskRow(
-                project,
-                d,
-                itemTable,
-                subtableToggle.openItemRows,
-              ),
-            ),
+footerElement: taskFooter,
             rowFormatter: (taskRow) =>
               partColors.applyPartColorToRow(taskRow, partId),
           });
@@ -594,7 +622,17 @@ partTable.on("tableBuilt", () => {
     },
   });
 
+taskTable.on("tableBuilt", () => {
+  const taskColumnControls = new ColumnControls(taskTable, { buttonText: "Kolumner" });
+  taskFooter.appendChild(taskColumnControls.button);
+});
+
   itemTable.on("tableBuilt", () => {
+    const itemColumnControls = new ColumnControls(itemTable, {
+      buttonText: "Kolumner",
+    });
+    itemFooter.appendChild(itemColumnControls.button);
+
     applyPartFilter();
     updatePartOptions();
   });
@@ -605,7 +643,7 @@ partTable.on("tableBuilt", () => {
   }
 
   // ======= SUMMERINGSKOPPLINGAR FÖR ITEM =======
-itemTable.on("dataFiltered", () => setTimeout(updateItemSummary, 0));
+  itemTable.on("dataFiltered", () => setTimeout(updateItemSummary, 0));
   itemTable.on("cellEdited", updateItemSummary);
   itemTable.on("rowAdded", updateItemSummary);
   itemTable.on("rowDeleted", updateItemSummary);
@@ -641,7 +679,6 @@ const applyPartFilter = () => {
     return true;
   };
   itemTable.setFilter(combinedFilter);
-
 };
 
 const updatePartOptions = () => {
@@ -687,20 +724,20 @@ function updateItemSummary() {
   const totalMaterial = project.prj_material_user_price_total || 0;
   const totalWork = project.prj_work_task_duration_total || 0;
 
-// Debounced AJAX: Only send totals if values changed and after 300ms quiet period
-if (ajaxTotalsDebounceTimer) clearTimeout(ajaxTotalsDebounceTimer);
-ajaxTotalsDebounceTimer = setTimeout(() => {
-  if (totalMaterial !== lastSentMaterial || totalWork !== lastSentWork) {
-    ajaxHandler.queuedEchoAjax({
-      action: "updateProjectTotals",
-      prj_id: project.prj_id,
-      material_total: totalMaterial,
-      work_total: totalWork,
-    });
-    lastSentMaterial = totalMaterial;
-    lastSentWork = totalWork;
-  }
-}, 300);
+  // Debounced AJAX: Only send totals if values changed and after 300ms quiet period
+  if (ajaxTotalsDebounceTimer) clearTimeout(ajaxTotalsDebounceTimer);
+  ajaxTotalsDebounceTimer = setTimeout(() => {
+    if (totalMaterial !== lastSentMaterial || totalWork !== lastSentWork) {
+      ajaxHandler.queuedEchoAjax({
+        action: "updateProjectTotals",
+        prj_id: project.prj_id,
+        material_total: totalMaterial,
+        work_total: totalWork,
+      });
+      lastSentMaterial = totalMaterial;
+      lastSentWork = totalWork;
+    }
+  }, 300);
 
   // Skriv ut summeringen i HTML
   const summaryDiv = document.getElementById("item-summary");
@@ -716,10 +753,10 @@ ajaxTotalsDebounceTimer = setTimeout(() => {
       </div>
     `;
   }
-const stageSums = calcUtils.sumTotalsPerStage(filteredItems);
+  const stageSums = calcUtils.sumTotalsPerStage(filteredItems);
 
-// Bygg HTML-tabell
-let stageTable = `
+  // Bygg HTML-tabell
+  let stageTable = `
   <table style="margin-top:12px; border-collapse:collapse; font-size:13px;">
     <thead>
       <tr>
@@ -731,20 +768,20 @@ let stageTable = `
     <tbody>
 `;
 
-Object.entries(stageSums).forEach(([stage, sums]) => {
-  stageTable += `
+  Object.entries(stageSums).forEach(([stage, sums]) => {
+    stageTable += `
     <tr>
       <td style="padding:2px 8px;">${stage}</td>
       <td style="text-align:right; padding:2px 8px;">${sums.materialTotal}</td>
       <td style="text-align:right; padding:2px 8px;">${sums.workTotal}</td>
     </tr>
   `;
-});
+  });
 
-stageTable += '</tbody></table>';
+  stageTable += "</tbody></table>";
 
-// Lägg till i summary-diven
-summaryDiv.innerHTML += `
+  // Lägg till i summary-diven
+  summaryDiv.innerHTML += `
   <div style="margin-top:8px;">
     <strong>Fördelning per byggskede:</strong>
     ${stageTable}
@@ -766,22 +803,22 @@ const initUI = async () => {
       //   ajaxHandler.handleTagUpdate,
       //   tableUtils,
       // );
-addTagsToTable(
-  itemTable,
-  "item",
-  project,
-  ajaxHandler.handleTagUpdate,
-  tableUtils,
-);
+      addTagsToTable(
+        itemTable,
+        "item",
+        project,
+        ajaxHandler.handleTagUpdate,
+        tableUtils,
+      );
 
-// Koppla summering och filtrering till taggfilter-logiken (rätt event)
-itemTable.on("headerFilterChanged", () => {
-  const tagUtils = window.__tagUtils?.["item-table"];
-  itemsTagFilter = tagUtils?.getCurrentFilter() || [];
-  applyPartFilter(); // Filtrera items
-});
-// Summera alltid när Tabulator filtrerat klart (oavsett filterkälla!)
-itemTable.on("dataFiltered", updateItemSummary);
+      // Koppla summering och filtrering till taggfilter-logiken (rätt event)
+      itemTable.on("headerFilterChanged", () => {
+        const tagUtils = window.__tagUtils?.["item-table"];
+        itemsTagFilter = tagUtils?.getCurrentFilter() || [];
+        applyPartFilter(); // Filtrera items
+      });
+      // Summera alltid när Tabulator filtrerat klart (oavsett filterkälla!)
+      itemTable.on("dataFiltered", updateItemSummary);
     })
 
     .catch((err) => console.warn("Tagg-init misslyckades:", err));
