@@ -137,6 +137,10 @@ let partTable = null;
 let itemTable = null;
 let commentsModule = null;
 
+// --- GLOBAL TASK COLUMN STATE ---
+const allTaskTables = new Set(); // Alla task-tabeller på sidan
+const hiddenTaskColumns = new Set(); // Fält (strings) som är dolda i Task-tabeller
+
 // --- Debounce for project totals AJAX ---
 let ajaxTotalsDebounceTimer = null;
 let lastSentMaterial = null;
@@ -585,9 +589,54 @@ footerElement: taskFooter,
               partColors.applyPartColorToRow(taskRow, partId),
           });
 
-          taskTable.on("tableBuilt", () => {
+          // Lägg till här:
+allTaskTables.add(taskTable);
+// Döljer dolda kolumner direkt på nya tabellen
+hiddenTaskColumns.forEach(field => {
+  taskTable.hideColumn(field);
+});
+allTaskTables.delete(taskTable);
+
+taskTable.on("tableBuilt", () => {
+  // Lägg till taskTable I SET här!
+  allTaskTables.add(taskTable);
+
+  // Skapa kolumnkontroll-knappen
   const taskColumnControls = new ColumnControls(taskTable, { buttonText: "Kolumner" });
   taskFooter.appendChild(taskColumnControls.button);
+
+  // Döljer kolumner enligt global state (vid första bygg)
+  hiddenTaskColumns.forEach(field => {
+    taskTable.hideColumn(field);
+  });
+
+  // Lyssna på ändringar i dropdownen – synka ALLA taskTables!
+  taskColumnControls.menu.addEventListener("change", (e) => {
+    if (e.target.tagName === "INPUT" && e.target.type === "checkbox") {
+      // Hitta field
+      const label = e.target.closest(".cc-item");
+      if (!label) return;
+      const fieldText = Array.from(label.childNodes)
+        .filter(n => n.nodeType === Node.TEXT_NODE)
+        .map(n => n.textContent.trim())[0];
+      // Hitta field i kolumndefinitionerna
+      let colField = null;
+      taskTable.getColumns().forEach(col => {
+        if ((col.getDefinition().title || col.getField()) === fieldText) {
+          colField = col.getField();
+        }
+      });
+      if (!colField) return;
+      // Uppdatera global state
+      if (e.target.checked) hiddenTaskColumns.delete(colField);
+      else hiddenTaskColumns.add(colField);
+      // Synka ALLA taskTables
+      allTaskTables.forEach(tbl => {
+        if (e.target.checked) tbl.showColumn(colField);
+        else tbl.hideColumn(colField);
+      });
+    }
+  });
 });
           // Koppla summeringsuppdatering till taskTable
           taskTable.on("dataFiltered", updateItemSummary);
