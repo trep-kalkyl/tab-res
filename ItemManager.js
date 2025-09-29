@@ -314,3 +314,56 @@ export function copyTaskRow(project, rowData, itemTable, openItemRows) {
   // Optional: Focus name cell for edit
   setTimeout(() => itemRow._subTaskTable?.getRow(newTask.tsk_id)?.getCell("tsk_name").edit(), 0);
 }
+/**
+ * Copy an Item: Deep clone, new ID, all tasks also cloned with new IDs, add to part, update all, sync Tabulator.
+ */
+export function copyItemRow(project, rowData, itemTable, partTable, updatePartOptions, applyPartFilter, openItemRows) {
+  // Find parent part
+  const part = project.prt_parts?.find(p => p.prt_id === rowData.itm_prt_id);
+  if (!part) return;
+
+  // Deep clone, new item ID
+  const newItem = JSON.parse(JSON.stringify(rowData));
+  newItem.itm_id = calcUtils.getNextItemId(project);
+  newItem.itm_name = (rowData.itm_name || "") + " (kopiera)";
+  newItem.itm_comments = [];
+  newItem.itm_tags = [];
+
+  // Clone and assign new IDs for all tasks
+  if (Array.isArray(newItem.itm_tasks)) {
+    newItem.itm_tasks = newItem.itm_tasks.map(task => {
+      const newTask = { ...JSON.parse(JSON.stringify(task)) };
+      newTask.tsk_id = calcUtils.getNextTaskId(project);
+      newTask.tsk_itm_id = newItem.itm_id;
+      newTask.tsk_name = (task.tsk_name || "") + " (kopiera)";
+      newTask.tsk_comments = [];
+      newTask.tsk_tags = [];
+      return newTask;
+    });
+  }
+
+  // Add to part
+  part.prt_items.push(newItem);
+
+  // Update all calculations
+  calcUtils.updateAllData(project);
+
+  // Update Tabulator
+  itemTable.addRow(newItem);
+  if (openItemRows) openItemRows.add(newItem.itm_id);
+  if (updatePartOptions) updatePartOptions();
+  if (applyPartFilter) applyPartFilter();
+
+  // AJAX
+  ajaxHandler.queuedEchoAjax({
+    action: "copyItem",
+    sourceItemId: rowData.itm_id,
+    newItemId: newItem.itm_id,
+    partId: newItem.itm_prt_id,
+    itm_name: newItem.itm_name,
+    copiedTaskCount: newItem.itm_tasks.length,
+  });
+
+  // Optional: Focus name cell for edit
+  setTimeout(() => itemTable.getRow(newItem.itm_id)?.getCell("itm_name").edit(), 0);
+}
