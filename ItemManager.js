@@ -269,3 +269,48 @@ export function updateTaskCell(project, cell, itemTable, partTable) {
 
   ajaxHandler.queuedEchoAjax({ tsk_id: task.tsk_id, [field]: value, action: "updateTask" });
 }
+
+/**
+ * Copy a Task: Deep clone a task in same Item, assign new ID, reset comments/tags, update all and sync Tabulator.
+ */
+export function copyTaskRow(project, rowData, itemTable, openItemRows) {
+  // Find parent item
+  const item = calcUtils.findItemById(project, rowData.tsk_itm_id);
+  if (!item) return;
+
+  // Deep clone and assign new ID
+  const newTask = { ...JSON.parse(JSON.stringify(rowData)) };
+  newTask.tsk_id = calcUtils.getNextTaskId(project);
+  newTask.tsk_name = (rowData.tsk_name || "") + " (kopiera)";
+  newTask.tsk_comments = [];
+  newTask.tsk_tags = [];
+
+  // Add to item
+  item.itm_tasks.push(newTask);
+
+  // Update all calculations
+  calcUtils.updateAllData(project);
+
+  // Update Tabulator subtable (if present) or redraw
+  const itemRow = itemTable.getRow(item.itm_id);
+  if (itemRow && itemRow._subTaskTable) {
+    itemRow._subTaskTable.addRow(newTask);
+  } else {
+    itemTable.redraw(true);
+  }
+  // Keep subtable open
+  openItemRows?.add(item.itm_id);
+
+  // AJAX notify
+  ajaxHandler.queuedEchoAjax({
+    action: "copyTask",
+    sourceTaskId: rowData.tsk_id,
+    newTaskId: newTask.tsk_id,
+    itemId: item.itm_id,
+    partId: item.itm_prt_id,
+    tsk_name: newTask.tsk_name,
+  });
+
+  // Optional: Focus name cell for edit
+  setTimeout(() => itemRow._subTaskTable?.getRow(newTask.tsk_id)?.getCell("tsk_name").edit(), 0);
+}
