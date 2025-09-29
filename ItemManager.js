@@ -133,3 +133,43 @@ export function openImportModal({ targetType, table, project, addRowFn }) {
     }
   });
 }
+// Kopiera en Task och lägg till den i samma Item
+export function handleCopyTask(project, taskData, itemTable, openItemRows) {
+  // Hitta rätt item
+  const item = project.prt_parts
+    .flatMap(part => part.prt_items || [])
+    .find(item => item.itm_id === taskData.tsk_itm_id);
+  if (!item) return;
+
+  // Djup kopia av task
+  const newTask = JSON.parse(JSON.stringify(taskData));
+  newTask.tsk_id = calcUtils.getNextTaskId(project);
+  newTask.tsk_name = (taskData.tsk_name || "") + " (kopia)";
+  newTask.tsk_comments = []; // Nollställ kommentarer
+  newTask.tsk_tags = []; // Nollställ tags
+
+  // Lägg till i item
+  item.itm_tasks.push(newTask);
+
+  // Uppdatera kalkyler
+  calcUtils.updateAllData(project);
+
+  // Uppdatera Tabulator-tabell
+  itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+
+  // AJAX: Skicka info om kopiering
+  const ajaxData = {
+    action: "copyTask",
+    sourceTaskId: taskData.tsk_id,
+    newTaskId: newTask.tsk_id,
+    itemId: item.itm_id,
+    partId: item.itm_prt_id,
+    tsk_name: newTask.tsk_name,
+  };
+  import("./ajaxHandler.js").then(mod => {
+    mod.queuedEchoAjax(ajaxData);
+  });
+
+  // Öppna subtable om den är stängd (valfritt)
+  openItemRows?.add(item.itm_id);
+}
