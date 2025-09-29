@@ -173,3 +173,27 @@ export function handleCopyTask(project, taskData, itemTable, openItemRows) {
   // Öppna subtable om den är stängd (valfritt)
   openItemRows?.add(item.itm_id);
 }
+
+export function addItemRow(project, itemTable, partTable, updatePartOptions, applyPartFilter, openItemRows) {
+  // Skapa en tom item med nytt ID och default-data
+  const newItem = {
+    itm_id: calcUtils.getNextItemId(project),
+    itm_prt_id: project.prt_parts[0]?.prt_id || 1, // Första part som default
+    itm_name: "Ny Item",
+    itm_quantity: 1,
+    itm_tags: [],
+    itm_comments: [],
+    itm_tasks: [],
+  };
+  // Lägg till i rätt part
+  const part = project.prt_parts.find(p => p.prt_id === newItem.itm_prt_id);
+  if (part) {
+    part.prt_items.push(newItem);
+  }
+  calcUtils.updateAllData(project);
+  itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+  updatePartOptions();
+  applyPartFilter();
+  // Eventuellt öppna subtable
+  openItemRows?.add(newItem.itm_id);
+}
