@@ -133,6 +133,43 @@ export function openImportModal({ targetType, table, project, addRowFn }) {
     }
   });
 }
+export function addPartRow(project, partTable, itemTable, updatePartOptions, applyPartFilter) {
+  const newPart = {
+    prt_id: calcUtils.getNextPartId(project),
+    prt_prj_id: project.prj_id,
+    prt_name: "Ny Part",
+    prt_comments: [],
+    prt_tags: [],
+    prt_items: [],
+    selected: true,
+  };
+  project.prt_parts.push(newPart);
+  calcUtils.updateAllData(project);
+  partTable.setData(project.prt_parts);
+  updatePartOptions();
+  applyPartFilter();
+}
+
+// Skapa ny Task och lägg till i valt Item
+export function addTaskRow(project, itemData, itemTable, openItemRows) {
+  const newTask = {
+    tsk_id: calcUtils.getNextTaskId(project),
+    tsk_itm_id: itemData.itm_id,
+    tsk_name: "Ny Task",
+    tsk_total_quantity: 1,
+    tsk_work_task_duration: 1,
+    tsk_material_amount: 1,
+    tsk_material_user_price: 0,
+    tsk_comments: [],
+    tsk_tags: [],
+    tsk_construction_stage: "",
+  };
+  itemData.itm_tasks.push(newTask);
+  calcUtils.updateAllData(project);
+  itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+  openItemRows?.add(itemData.itm_id);
+}
+
 // Kopiera en Task och lägg till den i samma Item
 export function handleCopyTask(project, taskData, itemTable, openItemRows) {
   // Hitta rätt item
