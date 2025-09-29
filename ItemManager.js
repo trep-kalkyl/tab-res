@@ -367,3 +367,64 @@ export function copyItemRow(project, rowData, itemTable, partTable, updatePartOp
   // Optional: Focus name cell for edit
   setTimeout(() => itemTable.getRow(newItem.itm_id)?.getCell("itm_name").edit(), 0);
 }
+/**
+ * Copy a Part: Deep clone, new ID, all items & tasks also cloned with new IDs, add to project, update all, sync Tabulator.
+ */
+export function copyPartRow(project, rowData, partTable, itemTable, updatePartOptions, applyPartFilter) {
+  // Deep clone, new part ID
+  const newPart = JSON.parse(JSON.stringify(rowData));
+  newPart.prt_id = calcUtils.getNextPartId(project);
+  newPart.prt_name = (rowData.prt_name || "") + " (kopiera)";
+  newPart.selected = true;
+  newPart.prt_comments = [];
+  newPart.prt_tags = [];
+
+  // Clone items & assign new IDs
+  if (Array.isArray(newPart.prt_items)) {
+    newPart.prt_items = newPart.prt_items.map(item => {
+      const newItem = { ...JSON.parse(JSON.stringify(item)) };
+      newItem.itm_id = calcUtils.getNextItemId(project);
+      newItem.itm_prt_id = newPart.prt_id;
+      newItem.itm_name = (item.itm_name || "") + " (kopiera)";
+      newItem.itm_comments = [];
+      newItem.itm_tags = [];
+      // Clone tasks & assign new IDs
+      if (Array.isArray(newItem.itm_tasks)) {
+        newItem.itm_tasks = newItem.itm_tasks.map(task => {
+          const newTask = { ...JSON.parse(JSON.stringify(task)) };
+          newTask.tsk_id = calcUtils.getNextTaskId(project);
+          newTask.tsk_itm_id = newItem.itm_id;
+          newTask.tsk_name = (task.tsk_name || "") + " (kopiera)";
+          newTask.tsk_comments = [];
+          newTask.tsk_tags = [];
+          return newTask;
+        });
+      }
+      return newItem;
+    });
+  }
+
+  // Add to project
+  project.prt_parts.push(newPart);
+
+  // Update all calculations
+  calcUtils.updateAllData(project);
+
+  // Update Tabulator
+  partTable.addRow(newPart);
+  if (updatePartOptions) updatePartOptions();
+  if (applyPartFilter) applyPartFilter();
+  itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+
+  // AJAX
+  ajaxHandler.queuedEchoAjax({
+    action: "copyPart",
+    sourcePartId: rowData.prt_id,
+    newPartId: newPart.prt_id,
+    prt_name: newPart.prt_name,
+    copiedItemCount: newPart.prt_items.length,
+  });
+
+  // Optional: Focus name cell for edit
+  setTimeout(() => partTable.getRow(newPart.prt_id)?.getCell("prt_name").edit(), 0);
+}
