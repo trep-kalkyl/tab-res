@@ -9,7 +9,7 @@ import TagSystemUtils, {
 } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@65267c0005554e094bf3035aabd0fafa315c88df/tagSystemUtils.js";
 import { TabulatorCommentsModule } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@88c9adac5d37273f453a98392476a1cda6bb9654/commentSystem.js";
 import * as tableUtils from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@7bffba94d2f334d5b5ea34bb49743459ba05cba1/tableUtils.js";
-import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@91210c6dfa4e5681373dcabf0aeba22b060c19d8/ItemManager.js";
+import * as ItemManager from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@d038dbb291fd280fa5c04a1a325d16239dd9ac92/ItemManager.js";
 import MaterialLinksModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@0fbe21b36caab5ce08f86634a61272d3cd9a5eea/materialLinks.js";
 import { mathExpressionEditor } from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@2cbad2a1e5793822760906fc1b44c489b3b03b20/mathExpressionEditor.js";
 import * as ExportModule from "https://cdn.jsdelivr.net/gh/trep-kalkyl/tab-res@06e5ba13188cf37f5336ccbb0246c9c5f2909a17/ExportModule.js";
@@ -162,10 +162,47 @@ const deleteColumn = (cellClick) => ({
   headerSort: false,
 });
 
+const copyTaskColumn = (cellClick) => ({
+  title: "",
+  formatter: () => `<i class="fa fa-copy" title="Kopiera task" style="cursor:pointer;font-size:1.2em;"></i>`,
+  width: 50,
+  hozAlign: "center",
+  cellClick,
+  headerSort: false,
+});
+
+const copyItemColumn = (cellClick) => ({
+  title: "",
+  formatter: () => `<i class="fa fa-copy" title="Kopiera item" style="cursor:pointer;font-size:1.2em;"></i>`,
+  width: 50,
+  hozAlign: "center",
+  cellClick,
+  headerSort: false,
+});
+
+const copyPartColumn = (cellClick) => ({
+  title: "",
+  formatter: () => `<i class="fa fa-copy" title="Kopiera part" style="cursor:pointer;font-size:1.2em;"></i>`,
+  width: 50,
+  hozAlign: "center",
+  cellClick,
+  headerSort: false,
+});
+
 // ======= TABELLKONFIGURATION =======
 const getPartTableColumns = () => [
-  deleteColumn((e, cell) =>
+deleteColumn((e, cell) =>
     ItemManager.handleDeletePart(
+      project,
+      cell.getRow().getData(),
+      partTable,
+      itemTable,
+      updatePartOptions,
+      applyPartFilter,
+    ),
+  ),
+  copyPartColumn((e, cell) =>
+    ItemManager.copyPartRow(
       project,
       cell.getRow().getData(),
       partTable,
@@ -235,6 +272,7 @@ const getItemTableColumns = () => [
     cellClick: (_e, cell) => subtableToggle.toggleSubtable(cell.getRow(), cell),
     headerSort: false,
   },
+
   deleteColumn((e, cell) =>
     ItemManager.handleDeleteItem(
       project,
@@ -244,6 +282,17 @@ const getItemTableColumns = () => [
       subtableToggle.openItemRows,
       updatePartOptions,
       applyPartFilter,
+    ),
+  ),
+  copyItemColumn((e, cell) =>
+    ItemManager.copyItemRow(
+      project,
+      cell.getRow().getData(),
+      itemTable,
+      partTable,
+      updatePartOptions,
+      applyPartFilter,
+      subtableToggle.openItemRows,
     ),
   ),
   { title: "Item-ID", field: "itm_id", width: 70 },
@@ -314,6 +363,14 @@ const getItemTableColumns = () => [
 const getTaskTableColumns = () => [
   deleteColumn((e, cell) =>
     ItemManager.handleDeleteTask(
+      project,
+      cell.getRow().getData(),
+      itemTable,
+      subtableToggle.openItemRows,
+    ),
+  ),
+  copyTaskColumn((e, cell) =>
+    ItemManager.copyTaskRow(
       project,
       cell.getRow().getData(),
       itemTable,
