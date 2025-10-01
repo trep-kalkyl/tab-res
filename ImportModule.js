@@ -1,5 +1,5 @@
 // ImportModule.js
-// Handles import of Parts, Items, and Tasks with preview, row selection, parent selection, and ID regeneration
+// Handles import of Parts, Items, and Tasks with Tabulator preview, row selection, parent selection, and ID regeneration
 
 import * as calcUtils from "./projectCalcUtils.js";
 import * as ajaxHandler from "./ajaxHandler.js";
@@ -194,116 +194,153 @@ export function regenerateIds(project, data, type, parentId = null) {
 }
 
 /**
- * Shows parent selection dialog for items or tasks
- * @param {Object} project - Project object
- * @param {string} type - "item" or "task"
- * @param {Function} onSelect - Callback with selected parent ID
+ * Get available parents for dropdown
  */
-function showParentSelectionDialog(project, type, onSelect) {
-  const overlay = document.createElement("div");
-  overlay.className = "tab-modal-overlay active";
-  overlay.style.zIndex = 100000; // Higher than preview modal
-  
-  const modal = document.createElement("div");
-  modal.className = "tab-modal-content";
-  modal.style.maxWidth = "500px";
-  
-  const title = document.createElement("h3");
-  title.className = "tab-modal-title";
-  title.textContent = type === "item" ? "Välj Parent (Part)" : "Välj Parent (Item)";
-  modal.appendChild(title);
-  
-  const info = document.createElement("p");
-  info.textContent = `Parent-ID från importfilen ignoreras. Välj ${type === "item" ? "Part" : "Item"} att importera till:`;
-  info.style.marginBottom = "16px";
-  info.style.fontSize = "14px";
-  modal.appendChild(info);
-  
-  // Get available parents
-  let parents = [];
-  if (type === "item") {
-    parents = project.prt_parts || [];
+function getParentOptions(project, type) {
+  if (type === "item" || type === "part") {
+    // Return parts as parent options for items
+    return (project.prt_parts || []).map(part => ({
+      value: part.prt_id,
+      label: `${part.prt_name} (ID: ${part.prt_id})`
+    }));
   } else if (type === "task") {
-    // Get all items from all parts
+    // Return items (from all parts) as parent options for tasks
+    const items = [];
     (project.prt_parts || []).forEach(part => {
       (part.prt_items || []).forEach(item => {
-        parents.push({ ...item, partName: part.prt_name });
+        items.push({
+          value: item.itm_id,
+          label: `${item.itm_name} (Part: ${part.prt_name}, ID: ${item.itm_id})`
+        });
       });
     });
+    return items;
   }
-  
-  if (parents.length === 0) {
-    const warning = document.createElement("p");
-    warning.textContent = `Ingen ${type === "item" ? "Part" : "Item"} hittades. Skapa en först!`;
-    warning.style.color = "red";
-    warning.style.fontWeight = "bold";
-    modal.appendChild(warning);
-    
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "tab-modal-btn tab-modal-cancel";
-    closeBtn.textContent = "Stäng";
-    closeBtn.onclick = () => overlay.remove();
-    modal.appendChild(closeBtn);
-    
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    return;
-  }
-  
-  // Create parent selection dropdown
-  const select = document.createElement("select");
-  select.style.width = "100%";
-  select.style.padding = "10px";
-  select.style.fontSize = "14px";
-  select.style.marginBottom = "16px";
-  select.style.border = "1px solid #ddd";
-  select.style.borderRadius = "6px";
-  
-  parents.forEach(parent => {
-    const option = document.createElement("option");
-    if (type === "item") {
-      option.value = parent.prt_id;
-      option.textContent = `${parent.prt_name} (ID: ${parent.prt_id})`;
-    } else {
-      option.value = parent.itm_id;
-      option.textContent = `${parent.itm_name} (Part: ${parent.partName}, ID: ${parent.itm_id})`;
-    }
-    select.appendChild(option);
-  });
-  
-  modal.appendChild(select);
-  
-  // Buttons
-  const btnRow = document.createElement("div");
-  btnRow.className = "tab-modal-buttons";
-  
-  const confirmBtn = document.createElement("button");
-  confirmBtn.className = "tab-modal-btn tab-modal-confirm";
-  confirmBtn.textContent = "Välj";
-  confirmBtn.onclick = () => {
-    const selectedId = parseInt(select.value);
-    overlay.remove();
-    onSelect(selectedId);
-  };
-  btnRow.appendChild(confirmBtn);
-  
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "tab-modal-btn tab-modal-cancel";
-  cancelBtn.textContent = "Avbryt";
-  cancelBtn.onclick = () => overlay.remove();
-  btnRow.appendChild(cancelBtn);
-  
-  modal.appendChild(btnRow);
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+  return [];
 }
 
 /**
- * Shows import preview modal with row selection
+ * Get columns for Tabulator preview table based on type
+ */
+function getColumnsForPreview(project, type) {
+  const baseColumns = [
+    {
+      title: "",
+      field: "_selected",
+      formatter: "tickCross",
+      width: 50,
+      hozAlign: "center",
+      headerSort: false,
+      editor: true,
+      cellEdited: () => {} // Allow toggle
+    }
+  ];
+  
+  // Add parent column for items and tasks
+  if (type === "item" || type === "task") {
+    const parentOptions = getParentOptions(project, type);
+    
+    if (parentOptions.length === 0) {
+      alert(`Ingen ${type === "item" ? "Part" : "Item"} hittades. Skapa en först!`);
+      return null;
+    }
+    
+    baseColumns.push({
+      title: type === "item" ? "Välj Parent (Part)" : "Välj Parent (Item)",
+      field: "_parentId",
+      editor: "list",
+      editorParams: { values: parentOptions },
+      formatter: (cell) => {
+        const val = cell.getValue();
+        const opt = parentOptions.find(o => o.value == val);
+        return opt ? opt.label : "Välj parent...";
+      },
+      width: 250,
+      headerSort: false
+    });
+  }
+  
+  switch(type) {
+    case 'part':
+      return [
+        ...baseColumns,
+        { title: "Part ID (kommer ändras)", field: "prt_id", width: 120 },
+        { title: "Namn", field: "prt_name", editor: "input" },
+        { title: "Antal Items", field: "_itemCount", width: 100 }
+      ];
+    case 'item':
+      return [
+        ...baseColumns,
+        { title: "Item ID (kommer ändras)", field: "itm_id", width: 120 },
+        { title: "Namn", field: "itm_name", editor: "input" },
+        { title: "Kategori", field: "itm_category", editor: "input" },
+        { title: "Antal", field: "itm_quantity", editor: "number" },
+        { title: "Antal Tasks", field: "_taskCount", width: 100 }
+      ];
+    case 'task':
+      return [
+        ...baseColumns,
+        { title: "Task ID (kommer ändras)", field: "tsk_id", width: 120 },
+        { title: "Namn", field: "tsk_name", editor: "input" },
+        { title: "Quantity", field: "tsk_total_quantity", editor: "number" }
+      ];
+    case 'project':
+      return [
+        ...baseColumns,
+        { title: "Part ID (kommer ändras)", field: "prt_id", width: 120 },
+        { title: "Namn", field: "prt_name", editor: "input" },
+        { title: "Antal Items", field: "_itemCount", width: 100 }
+      ];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Extract rows from data for preview with metadata
+ */
+function getRowsFromData(project, data, type) {
+  let rows = [];
+  
+  if (type === 'project' && data.prt_parts) {
+    rows = data.prt_parts;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else {
+    rows = [data];
+  }
+  
+  // Add metadata fields
+  return rows.map(row => {
+    const enriched = { ...row };
+    enriched._selected = true; // Default: all selected
+    
+    // Add counts
+    if (type === 'item' || type === 'project') {
+      enriched._itemCount = row.prt_items ? row.prt_items.length : 0;
+    }
+    if (type === 'item') {
+      enriched._taskCount = row.itm_tasks ? row.itm_tasks.length : 0;
+    }
+    
+    // Set default parent (first available)
+    if (type === "item" || type === "task") {
+      const parentOptions = getParentOptions(project, type);
+      if (parentOptions.length > 0) {
+        enriched._parentId = parentOptions[0].value;
+      }
+    }
+    
+    return enriched;
+  });
+}
+
+/**
+ * Shows import preview modal with Tabulator table
  * @param {Object} project - Project object
  * @param {Object} data - Import data
  * @param {string} type - Import type
- * @param {Function} onConfirm - Callback with selected rows and parent ID
+ * @param {Function} onConfirm - Callback with selected rows
  */
 export function showImportPreview(project, data, type, onConfirm) {
   const overlay = document.createElement("div");
@@ -312,8 +349,11 @@ export function showImportPreview(project, data, type, onConfirm) {
   
   const modal = document.createElement("div");
   modal.className = "tab-modal-content";
-  modal.style.maxWidth = "800px";
-  modal.style.width = "90%";
+  modal.style.maxWidth = "95%";
+  modal.style.width = "1200px";
+  modal.style.maxHeight = "90vh";
+  modal.style.display = "flex";
+  modal.style.flexDirection = "column";
   
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
@@ -322,8 +362,10 @@ export function showImportPreview(project, data, type, onConfirm) {
   
   const info = document.createElement("p");
   info.innerHTML = `
-    <strong>Välj rader att importera</strong><br>
-    ${type !== "part" ? `• Du måste välja parent för varje rad<br>` : ""}
+    <strong>Redigera och välj rader att importera</strong><br>
+    ${type !== "part" ? `• Välj parent för varje rad i tabellen<br>` : ""}
+    • Klicka checkboxen för att välja/avmarkera rader<br>
+    • Använd filter och sortering för att hitta rätt rader<br>
     • Parent-ID från importfilen ignoreras<br>
     • Nya ID:n genereras automatiskt<br>
     • Totalsummor räknas om
@@ -332,112 +374,64 @@ export function showImportPreview(project, data, type, onConfirm) {
   info.style.fontSize = "14px";
   modal.appendChild(info);
   
-  // Preview table
+  // Tabulator container
   const tableContainer = document.createElement("div");
-  tableContainer.style.maxHeight = "400px";
-  tableContainer.style.overflowY = "auto";
+  tableContainer.style.flex = "1";
+  tableContainer.style.minHeight = "300px";
+  tableContainer.style.maxHeight = "500px";
+  tableContainer.style.overflow = "auto";
   tableContainer.style.border = "1px solid #ddd";
   tableContainer.style.borderRadius = "6px";
   tableContainer.style.marginBottom = "16px";
-  
-  const table = document.createElement("table");
-  table.style.width = "100%";
-  table.style.borderCollapse = "collapse";
-  
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  headerRow.style.background = "#f5f5f5";
-  
-  const selectAllTh = document.createElement("th");
-  selectAllTh.style.padding = "10px";
-  selectAllTh.style.textAlign = "center";
-  const selectAllCheckbox = document.createElement("input");
-  selectAllCheckbox.type = "checkbox";
-  selectAllCheckbox.checked = true;
-  selectAllTh.appendChild(selectAllCheckbox);
-  headerRow.appendChild(selectAllTh);
-  
-  const columns = getColumnsForType(type);
-  columns.forEach(col => {
-    const th = document.createElement("th");
-    th.textContent = col.title;
-    th.style.padding = "10px";
-    th.style.textAlign = "left";
-    th.style.borderBottom = "2px solid #ddd";
-    headerRow.appendChild(th);
-  });
-  
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-  
-  const tbody = document.createElement("tbody");
-  const rows = getRowsFromData(data, type);
-  const checkboxes = [];
-  
-  rows.forEach((rowData, idx) => {
-    const tr = document.createElement("tr");
-    tr.style.borderBottom = "1px solid #eee";
-    if (idx % 2 === 0) tr.style.background = "#fafafa";
-    
-    const selectTd = document.createElement("td");
-    selectTd.style.padding = "10px";
-    selectTd.style.textAlign = "center";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = true;
-    checkbox.dataset.index = idx;
-    checkboxes.push(checkbox);
-    selectTd.appendChild(checkbox);
-    tr.appendChild(selectTd);
-    
-    columns.forEach(col => {
-      const td = document.createElement("td");
-      td.style.padding = "10px";
-      td.textContent = rowData[col.field] || "-";
-      tr.appendChild(td);
-    });
-    
-    tbody.appendChild(tr);
-  });
-  
-  table.appendChild(tbody);
-  tableContainer.appendChild(table);
   modal.appendChild(tableContainer);
   
-  selectAllCheckbox.addEventListener("change", () => {
-    checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+  // Get columns
+  const columns = getColumnsForPreview(project, type);
+  if (!columns) {
+    overlay.remove();
+    return;
+  }
+  
+  // Get rows with metadata
+  const rows = getRowsFromData(project, data, type);
+  
+  // Create Tabulator
+  const previewTable = new Tabulator(tableContainer, {
+    data: rows,
+    columns: columns,
+    layout: "fitDataFill",
+    height: "100%",
+    headerFilterPlaceholder: "Filter...",
   });
   
   // Buttons
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
+  btnRow.style.marginTop = "16px";
   
   const importBtn = document.createElement("button");
   importBtn.className = "tab-modal-btn tab-modal-confirm";
   importBtn.textContent = "Importera valda";
   importBtn.onclick = () => {
-    const selectedIndices = checkboxes
-      .filter(cb => cb.checked)
-      .map(cb => parseInt(cb.dataset.index));
+    const allRows = previewTable.getData();
+    const selectedRows = allRows.filter(row => row._selected === true);
     
-    if (selectedIndices.length === 0) {
+    if (selectedRows.length === 0) {
       alert("Välj minst en rad att importera");
       return;
     }
     
-    const selectedRows = selectedIndices.map(idx => rows[idx]);
-    
-    // For items and tasks, show parent selection dialog
+    // Validate parent selection for items/tasks
     if (type === "item" || type === "task") {
-      overlay.remove();
-      showParentSelectionDialog(project, type, (parentId) => {
-        onConfirm(selectedRows, type, parentId);
-      });
-    } else {
-      // Parts don't need parent selection
-      overlay.remove();
-      onConfirm(selectedRows, type, null);
+      const missingParent = selectedRows.some(row => !row._parentId);
+      if (missingParent) {
+        alert("Alla valda rader måste ha en parent vald");
+        return;
+      }
     }
+    
+    overlay.remove();
+    onConfirm(selectedRows, type);
   };
   btnRow.appendChild(importBtn);
   
@@ -453,83 +447,15 @@ export function showImportPreview(project, data, type, onConfirm) {
 }
 
 /**
- * Get columns for preview table based on type
- */
-function getColumnsForType(type) {
-  switch(type) {
-    case 'part':
-      return [
-        { title: "Part ID (kommer ändras)", field: "prt_id" },
-        { title: "Namn", field: "prt_name" },
-        { title: "Antal Items", field: "itemCount" }
-      ];
-    case 'item':
-      return [
-        { title: "Item ID (kommer ändras)", field: "itm_id" },
-        { title: "Namn", field: "itm_name" },
-        { title: "Kategori", field: "itm_category" },
-        { title: "Antal", field: "itm_quantity" },
-        { title: "Antal Tasks", field: "taskCount" }
-      ];
-    case 'task':
-      return [
-        { title: "Task ID (kommer ändras)", field: "tsk_id" },
-        { title: "Namn", field: "tsk_name" },
-        { title: "Quantity", field: "tsk_total_quantity" }
-      ];
-    case 'project':
-      return [
-        { title: "Part ID (kommer ändras)", field: "prt_id" },
-        { title: "Namn", field: "prt_name" },
-        { title: "Antal Items", field: "itemCount" }
-      ];
-    default:
-      return [];
-  }
-}
-
-/**
- * Extract rows from data for preview
- */
-function getRowsFromData(data, type) {
-  if (type === 'project' && data.prt_parts) {
-    return data.prt_parts.map(part => ({
-      ...part,
-      itemCount: part.prt_items ? part.prt_items.length : 0
-    }));
-  }
-  
-  if (Array.isArray(data)) {
-    return data.map(item => {
-      if (type === 'item') {
-        return {
-          ...item,
-          taskCount: item.itm_tasks ? item.itm_tasks.length : 0
-        };
-      }
-      return item;
-    });
-  }
-  
-  // Single entity
-  if (type === 'item') {
-    return [{
-      ...data,
-      taskCount: data.itm_tasks ? data.itm_tasks.length : 0
-    }];
-  }
-  
-  return [data];
-}
-
-/**
  * Import a single row with ID regeneration
  */
-function importSingleRow(project, data, type, parentId, tables) {
+function importSingleRow(project, data, type, tables) {
+  const parentId = data._parentId; // Parent selected in preview
   const withNewIds = regenerateIds(project, data, type, parentId);
   
   switch(type) {
     case 'part':
+    case 'project':
       project.prt_parts.push(withNewIds);
       ajaxHandler.queuedEchoAjax({ 
         action: "importPart", 
@@ -541,7 +467,7 @@ function importSingleRow(project, data, type, parentId, tables) {
     case 'item':
       const targetPart = project.prt_parts.find(p => p.prt_id === parentId);
       if (!targetPart) {
-        alert("Vald Part hittades inte");
+        console.error("Target part not found:", parentId);
         return;
       }
       if (!targetPart.prt_items) targetPart.prt_items = [];
@@ -555,14 +481,13 @@ function importSingleRow(project, data, type, parentId, tables) {
       break;
       
     case 'task':
-      // Find item in any part
       let targetItem = null;
       for (const part of project.prt_parts || []) {
         targetItem = (part.prt_items || []).find(i => i.itm_id === parentId);
         if (targetItem) break;
       }
       if (!targetItem) {
-        alert("Vald Item hittades inte");
+        console.error("Target item not found:", parentId);
         return;
       }
       if (!targetItem.itm_tasks) targetItem.itm_tasks = [];
@@ -572,15 +497,6 @@ function importSingleRow(project, data, type, parentId, tables) {
         tsk_id: withNewIds.tsk_id, 
         tsk_name: withNewIds.tsk_name,
         itm_id: targetItem.itm_id
-      });
-      break;
-      
-    case 'project':
-      project.prt_parts.push(withNewIds);
-      ajaxHandler.queuedEchoAjax({ 
-        action: "importPart", 
-        prt_id: withNewIds.prt_id, 
-        prt_name: withNewIds.prt_name 
       });
       break;
   }
@@ -607,9 +523,9 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
     
     const cleanedData = stripParentIdsAndTotals(rawData, type);
     
-    showImportPreview(project, cleanedData, type, (selectedRows, importType, parentId) => {
+    showImportPreview(project, cleanedData, type, (selectedRows, importType) => {
       selectedRows.forEach(row => {
-        importSingleRow(project, row, importType, parentId, tables);
+        importSingleRow(project, row, importType, tables);
       });
       
       calcUtils.updateAllData(project);
@@ -652,8 +568,8 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   const info = document.createElement("p");
   info.innerHTML = `
     <strong>Importera Parts, Items eller Tasks från JSON.</strong><br>
-    • Välj vilka rader som ska importeras<br>
-    • <strong>För Items/Tasks: Välj parent efter förhandsgranskning</strong><br>
+    • Välj vilka rader som ska importeras i förhandsgranskningen<br>
+    • Välj parent för Items/Tasks direkt i tabellen<br>
     • Parent-ID från fil ignoreras alltid<br>
     • Nya ID:n genereras automatiskt<br>
     • Totalsummor räknas om
