@@ -245,18 +245,37 @@ function getColumnsForPreview(project, type) {
       return null;
     }
     
+    // Skapa värden-objekt för editorParams (endast values, inte options)
+    const values = {};
+    parentOptions.forEach(opt => {
+      values[opt.value] = opt.label;
+    });
+    
     baseColumns.push({
       title: type === "item" ? "Välj Parent (Part)" : "Välj Parent (Item)",
       field: "_parentId",
       editor: "list",
-      editorParams: { values: parentOptions },
+      editorParams: { 
+        values: values,
+        clearable: false,
+        elementAttributes: {
+          maxLength: "200"
+        }
+      },
       formatter: (cell) => {
         const val = cell.getValue();
         const opt = parentOptions.find(o => o.value == val);
         return opt ? opt.label : "Välj parent...";
       },
-      width: 250,
-      headerSort: false
+      width: 300,
+      headerSort: false,
+      cellEdited: (cell) => {
+        // Force update to ensure value is saved
+        const row = cell.getRow();
+        const data = row.getData();
+        data._parentId = cell.getValue();
+        row.update(data);
+      }
     });
   }
   
@@ -316,7 +335,7 @@ function getRowsFromData(project, data, type) {
     enriched._selected = true; // Default: all selected
     
     // Add counts
-    if (type === 'item' || type === 'project') {
+    if (type === 'part' || type === 'project') {
       enriched._itemCount = row.prt_items ? row.prt_items.length : 0;
     }
     if (type === 'item') {
@@ -363,7 +382,7 @@ export function showImportPreview(project, data, type, onConfirm) {
   const info = document.createElement("p");
   info.innerHTML = `
     <strong>Redigera och välj rader att importera</strong><br>
-    ${type !== "part" ? `• Välj parent för varje rad i tabellen<br>` : ""}
+    ${type !== "part" && type !== "project" ? `• <strong>Viktigt:</strong> Klicka på parent-cellen och välj från dropdownen<br>` : ""}
     • Klicka checkboxen för att välja/avmarkera rader<br>
     • Använd filter och sortering för att hitta rätt rader<br>
     • Parent-ID från importfilen ignoreras<br>
@@ -425,7 +444,7 @@ export function showImportPreview(project, data, type, onConfirm) {
     if (type === "item" || type === "task") {
       const missingParent = selectedRows.some(row => !row._parentId);
       if (missingParent) {
-        alert("Alla valda rader måste ha en parent vald");
+        alert("Alla valda rader måste ha en parent vald. Klicka på parent-cellen och välj från dropdownen.");
         return;
       }
     }
