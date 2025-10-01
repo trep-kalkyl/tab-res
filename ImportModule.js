@@ -393,7 +393,7 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   ];
   
   const parentTable = new Tabulator(parentTableDiv, {
-    data: [],
+    data: parentOptions.map(p => ({ ...p, _selected: false })), // Sätt initial data här!
     columns: parentColumns,
     layout: "fitDataFill",
     height: "350px"
@@ -444,7 +444,7 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
       </div>
     `;
     
-    // Update parent table
+    // Update parent table checkboxes based on selection
     const parentsData = parentOptions.map(p => ({
       ...p,
       _selected: rowParentMap.get(currentRowIndex) === p.id
@@ -531,8 +531,8 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
   
-  // Initialize first row
-  renderCurrentRow();
+  // Initialize first row - VIKTIGT: Kör efter DOM är redo
+  setTimeout(() => renderCurrentRow(), 100);
 }
 
 /**
