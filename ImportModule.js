@@ -1,45 +1,25 @@
 // ImportModule.js
-// Handles import of Parts, Items, and Tasks with Tabulator preview, row selection, parent selection, and ID regeneration
+// Handles import of Parts, Items, and Tasks with separated preview and parent selection
 
 import * as calcUtils from "./projectCalcUtils.js";
 import * as ajaxHandler from "./ajaxHandler.js";
 
 /**
  * Detects import type from JSON structure
- * @param {Object} data - Parsed JSON object
- * @returns {string} - "part", "item", "task", or "unknown"
  */
 export function detectImportType(data) {
   if (!data || typeof data !== 'object') return 'unknown';
   
-  // Check for part structure
-  if (data.prt_id !== undefined && data.prt_name !== undefined) {
-    return 'part';
-  }
-  
-  // Check for item structure
-  if (data.itm_id !== undefined && data.itm_name !== undefined) {
-    return 'item';
-  }
-  
-  // Check for task structure
-  if (data.tsk_id !== undefined && data.tsk_name !== undefined) {
-    return 'task';
-  }
-  
-  // Check for project structure (import parts from project)
-  if (data.prt_parts && Array.isArray(data.prt_parts)) {
-    return 'project';
-  }
+  if (data.prt_id !== undefined && data.prt_name !== undefined) return 'part';
+  if (data.itm_id !== undefined && data.itm_name !== undefined) return 'item';
+  if (data.tsk_id !== undefined && data.tsk_name !== undefined) return 'task';
+  if (data.prt_parts && Array.isArray(data.prt_parts)) return 'project';
   
   return 'unknown';
 }
 
 /**
  * Validates import data structure
- * @param {Object} data - Import data
- * @param {string} type - Import type
- * @returns {Object} - { valid: boolean, errors: string[] }
  */
 export function validateImportData(data, type) {
   const errors = [];
@@ -74,12 +54,10 @@ export function validateImportData(data, type) {
 
 /**
  * Strips parent IDs and computed totals from import data
- * @param {Object} data - Import data
- * @param {string} type - Import type
- * @returns {Object} - Cleaned data
+ * VIKTIGT: Parent-ID tas ALLTID bort, oavsett om de finns i importen
  */
 export function stripParentIdsAndTotals(data, type) {
-  const cleaned = JSON.parse(JSON.stringify(data)); // Deep clone
+  const cleaned = JSON.parse(JSON.stringify(data));
   
   function cleanTask(task) {
     delete task.tsk_itm_id; // Parent ID ALWAYS removed
@@ -111,39 +89,30 @@ export function stripParentIdsAndTotals(data, type) {
   }
   
   switch(type) {
-    case 'task':
-      return cleanTask(cleaned);
-    case 'item':
-      return cleanItem(cleaned);
-    case 'part':
-      return cleanPart(cleaned);
+    case 'task': return cleanTask(cleaned);
+    case 'item': return cleanItem(cleaned);
+    case 'part': return cleanPart(cleaned);
     case 'project':
       if (cleaned.prt_parts && Array.isArray(cleaned.prt_parts)) {
         cleaned.prt_parts = cleaned.prt_parts.map(cleanPart);
       }
       return cleaned;
-    default:
-      return cleaned;
+    default: return cleaned;
   }
 }
 
 /**
  * Regenerates all IDs in import data
- * @param {Object} project - Project object
- * @param {Object} data - Import data
- * @param {string} type - Import type
- * @param {number} parentId - Parent ID (required for items/tasks)
- * @returns {Object} - Data with new IDs
  */
 export function regenerateIds(project, data, type, parentId = null) {
-  const withNewIds = JSON.parse(JSON.stringify(data)); // Deep clone
+  const withNewIds = JSON.parse(JSON.stringify(data));
   
   function regenerateTaskIds(item) {
     if (item.itm_tasks && Array.isArray(item.itm_tasks)) {
       item.itm_tasks = item.itm_tasks.map(task => {
         const newTaskId = calcUtils.getNextTaskId(project);
         task.tsk_id = newTaskId;
-        task.tsk_itm_id = item.itm_id; // Link to parent item
+        task.tsk_itm_id = item.itm_id;
         return task;
       });
     }
@@ -155,7 +124,7 @@ export function regenerateIds(project, data, type, parentId = null) {
       part.prt_items = part.prt_items.map(item => {
         const newItemId = calcUtils.getNextItemId(project);
         item.itm_id = newItemId;
-        item.itm_prt_id = part.prt_id; // Link to parent part
+        item.itm_prt_id = part.prt_id;
         regenerateTaskIds(item);
         return item;
       });
@@ -174,11 +143,11 @@ export function regenerateIds(project, data, type, parentId = null) {
   switch(type) {
     case 'task':
       withNewIds.tsk_id = calcUtils.getNextTaskId(project);
-      withNewIds.tsk_itm_id = parentId; // Set parent from user selection
+      withNewIds.tsk_itm_id = parentId;
       return withNewIds;
     case 'item':
       withNewIds.itm_id = calcUtils.getNextItemId(project);
-      withNewIds.itm_prt_id = parentId; // Set parent from user selection
+      withNewIds.itm_prt_id = parentId;
       regenerateTaskIds(withNewIds);
       return withNewIds;
     case 'part':
@@ -194,23 +163,21 @@ export function regenerateIds(project, data, type, parentId = null) {
 }
 
 /**
- * Get available parents for dropdown
+ * Get available parents for selection
  */
 function getParentOptions(project, type) {
-  if (type === "item" || type === "part") {
-    // Return parts as parent options for items
+  if (type === "item") {
     return (project.prt_parts || []).map(part => ({
       value: part.prt_id,
       label: `${part.prt_name} (ID: ${part.prt_id})`
     }));
   } else if (type === "task") {
-    // Return items (from all parts) as parent options for tasks
     const items = [];
     (project.prt_parts || []).forEach(part => {
       (part.prt_items || []).forEach(item => {
         items.push({
           value: item.itm_id,
-          label: `${item.itm_name} (Part: ${part.prt_name}, ID: ${item.itm_id})`
+          label: `${item.itm_name} (Part: ${part.prt_name})`
         });
       });
     });
@@ -220,148 +187,10 @@ function getParentOptions(project, type) {
 }
 
 /**
- * Get columns for Tabulator preview table based on type
+ * STEG 1: Förhandsgranska och välj rader (rad-exkludering)
+ * Visar data-förhandsgranskning där användaren kan välja vilka rader att importera
  */
-function getColumnsForPreview(project, type) {
-  const baseColumns = [
-    {
-      title: "",
-      field: "_selected",
-      formatter: "tickCross",
-      width: 50,
-      hozAlign: "center",
-      headerSort: false,
-      editor: true,
-      cellEdited: () => {} // Allow toggle
-    }
-  ];
-  
-  // Add parent column for items and tasks
-  if (type === "item" || type === "task") {
-    const parentOptions = getParentOptions(project, type);
-    
-    if (parentOptions.length === 0) {
-      alert(`Ingen ${type === "item" ? "Part" : "Item"} hittades. Skapa en först!`);
-      return null;
-    }
-    
-    // Skapa värden-objekt för editorParams (endast values, inte options)
-    const values = {};
-    parentOptions.forEach(opt => {
-      values[opt.value] = opt.label;
-    });
-    
-    baseColumns.push({
-      title: type === "item" ? "Välj Parent (Part)" : "Välj Parent (Item)",
-      field: "_parentId",
-      editor: "list",
-      editorParams: { 
-        values: values,
-        clearable: false,
-        elementAttributes: {
-          maxLength: "200"
-        }
-      },
-      formatter: (cell) => {
-        const val = cell.getValue();
-        const opt = parentOptions.find(o => o.value == val);
-        return opt ? opt.label : "Välj parent...";
-      },
-      width: 300,
-      headerSort: false,
-      cellEdited: (cell) => {
-        // Force update to ensure value is saved
-        const row = cell.getRow();
-        const data = row.getData();
-        data._parentId = cell.getValue();
-        row.update(data);
-      }
-    });
-  }
-  
-  switch(type) {
-    case 'part':
-      return [
-        ...baseColumns,
-        { title: "Part ID (kommer ändras)", field: "prt_id", width: 120 },
-        { title: "Namn", field: "prt_name", editor: "input" },
-        { title: "Antal Items", field: "_itemCount", width: 100 }
-      ];
-    case 'item':
-      return [
-        ...baseColumns,
-        { title: "Item ID (kommer ändras)", field: "itm_id", width: 120 },
-        { title: "Namn", field: "itm_name", editor: "input" },
-        { title: "Kategori", field: "itm_category", editor: "input" },
-        { title: "Antal", field: "itm_quantity", editor: "number" },
-        { title: "Antal Tasks", field: "_taskCount", width: 100 }
-      ];
-    case 'task':
-      return [
-        ...baseColumns,
-        { title: "Task ID (kommer ändras)", field: "tsk_id", width: 120 },
-        { title: "Namn", field: "tsk_name", editor: "input" },
-        { title: "Quantity", field: "tsk_total_quantity", editor: "number" }
-      ];
-    case 'project':
-      return [
-        ...baseColumns,
-        { title: "Part ID (kommer ändras)", field: "prt_id", width: 120 },
-        { title: "Namn", field: "prt_name", editor: "input" },
-        { title: "Antal Items", field: "_itemCount", width: 100 }
-      ];
-    default:
-      return [];
-  }
-}
-
-/**
- * Extract rows from data for preview with metadata
- */
-function getRowsFromData(project, data, type) {
-  let rows = [];
-  
-  if (type === 'project' && data.prt_parts) {
-    rows = data.prt_parts;
-  } else if (Array.isArray(data)) {
-    rows = data;
-  } else {
-    rows = [data];
-  }
-  
-  // Add metadata fields
-  return rows.map(row => {
-    const enriched = { ...row };
-    enriched._selected = true; // Default: all selected
-    
-    // Add counts
-    if (type === 'part' || type === 'project') {
-      enriched._itemCount = row.prt_items ? row.prt_items.length : 0;
-    }
-    if (type === 'item') {
-      enriched._taskCount = row.itm_tasks ? row.itm_tasks.length : 0;
-    }
-    
-    // Set default parent (first available)
-    if (type === "item" || type === "task") {
-      const parentOptions = getParentOptions(project, type);
-      if (parentOptions.length > 0) {
-        enriched._parentId = parentOptions[0].value;
-      }
-    }
-    
-    return enriched;
-  });
-}
-
-/**
- * Shows import preview modal with Tabulator table
- * @param {Object} project - Project object
- * @param {Object} data - Import data
- * @param {string} type - Import type
- * @param {Function} onConfirm - Callback with selected rows
- */
-export function showImportPreview(project, data, type, onConfirm) {
+function showPreviewTable(project, data, type, onContinue) {
   const overlay = document.createElement("div");
   overlay.className = "tab-modal-overlay active";
   overlay.style.zIndex = 99999;
@@ -376,24 +205,22 @@ export function showImportPreview(project, data, type, onConfirm) {
   
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
-  title.textContent = `Förhandsgranska import: ${type}`;
+  title.textContent = `Steg 1: Förhandsgranska ${type} - Välj rader att importera`;
   modal.appendChild(title);
   
   const info = document.createElement("p");
   info.innerHTML = `
-    <strong>Redigera och välj rader att importera</strong><br>
-    ${type !== "part" && type !== "project" ? `• <strong>Viktigt:</strong> Klicka på parent-cellen och välj från dropdownen<br>` : ""}
-    • Klicka checkboxen för att välja/avmarkera rader<br>
+    <strong>Välj vilka rader du vill importera:</strong><br>
+    • Klicka i checkboxen för att välja/avmarkera rader<br>
+    • Redigera fält direkt i tabellen om du vill<br>
     • Använd filter och sortering för att hitta rätt rader<br>
-    • Parent-ID från importfilen ignoreras<br>
-    • Nya ID:n genereras automatiskt<br>
-    • Totalsummor räknas om
+    • Parent-ID från importfilen är redan borttagna<br>
+    • Nästa steg: Välj parent för varje rad
   `;
   info.style.marginBottom = "16px";
   info.style.fontSize = "14px";
   modal.appendChild(info);
   
-  // Tabulator container
   const tableContainer = document.createElement("div");
   tableContainer.style.flex = "1";
   tableContainer.style.minHeight = "300px";
@@ -404,34 +231,76 @@ export function showImportPreview(project, data, type, onConfirm) {
   tableContainer.style.marginBottom = "16px";
   modal.appendChild(tableContainer);
   
-  // Get columns
-  const columns = getColumnsForPreview(project, type);
-  if (!columns) {
-    overlay.remove();
-    return;
+  // Prepare rows
+  let rows = [];
+  if (type === 'project' && data.prt_parts) {
+    rows = data.prt_parts;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else {
+    rows = [data];
   }
   
-  // Get rows with metadata
-  const rows = getRowsFromData(project, data, type);
+  rows = rows.map(row => ({
+    ...row,
+    _selected: true,
+    _itemCount: row.prt_items ? row.prt_items.length : undefined,
+    _taskCount: row.itm_tasks ? row.itm_tasks.length : undefined
+  }));
   
-  // Create Tabulator
+  // Define columns based on type
+  let columns = [
+    {
+      title: "Importera",
+      field: "_selected",
+      formatter: "tickCross",
+      width: 80,
+      hozAlign: "center",
+      headerSort: false,
+      editor: true
+    }
+  ];
+  
+  switch(type) {
+    case 'part':
+    case 'project':
+      columns.push(
+        { title: "Namn", field: "prt_name", editor: "input", headerFilter: "input" },
+        { title: "Antal Items", field: "_itemCount", width: 120 }
+      );
+      break;
+    case 'item':
+      columns.push(
+        { title: "Namn", field: "itm_name", editor: "input", headerFilter: "input" },
+        { title: "Kategori", field: "itm_category", editor: "input", headerFilter: "input" },
+        { title: "Antal", field: "itm_quantity", editor: "number" },
+        { title: "Antal Tasks", field: "_taskCount", width: 120 }
+      );
+      break;
+    case 'task':
+      columns.push(
+        { title: "Namn", field: "tsk_name", editor: "input", headerFilter: "input" },
+        { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
+        { title: "Material Amount", field: "tsk_material_amount", editor: "number" }
+      );
+      break;
+  }
+  
   const previewTable = new Tabulator(tableContainer, {
     data: rows,
     columns: columns,
     layout: "fitDataFill",
-    height: "100%",
-    headerFilterPlaceholder: "Filter...",
+    height: "100%"
   });
   
-  // Buttons
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
   btnRow.style.marginTop = "16px";
   
-  const importBtn = document.createElement("button");
-  importBtn.className = "tab-modal-btn tab-modal-confirm";
-  importBtn.textContent = "Importera valda";
-  importBtn.onclick = () => {
+  const continueBtn = document.createElement("button");
+  continueBtn.className = "tab-modal-btn tab-modal-confirm";
+  continueBtn.textContent = type === "part" || type === "project" ? "Importera" : "Nästa: Välj Parent";
+  continueBtn.onclick = () => {
     const allRows = previewTable.getData();
     const selectedRows = allRows.filter(row => row._selected === true);
     
@@ -440,17 +309,147 @@ export function showImportPreview(project, data, type, onConfirm) {
       return;
     }
     
-    // Validate parent selection for items/tasks
-    if (type === "item" || type === "task") {
-      const missingParent = selectedRows.some(row => !row._parentId);
-      if (missingParent) {
-        alert("Alla valda rader måste ha en parent vald. Klicka på parent-cellen och välj från dropdownen.");
-        return;
+    overlay.remove();
+    onContinue(selectedRows);
+  };
+  btnRow.appendChild(continueBtn);
+  
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "tab-modal-btn tab-modal-cancel";
+  cancelBtn.textContent = "Avbryt";
+  cancelBtn.onclick = () => overlay.remove();
+  btnRow.appendChild(cancelBtn);
+  
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+/**
+ * STEG 2: Välj parent för varje rad (endast för Items/Tasks)
+ * Separat tabell där användaren MÅSTE välja parent från dropdown
+ */
+function showParentSelectionTable(project, selectedRows, type, onConfirm) {
+  const parentOptions = getParentOptions(project, type);
+  
+  if (parentOptions.length === 0) {
+    alert(`Ingen ${type === "item" ? "Part" : "Item"} hittades. Skapa en först innan import!`);
+    return;
+  }
+  
+  const overlay = document.createElement("div");
+  overlay.className = "tab-modal-overlay active";
+  overlay.style.zIndex = 99999;
+  
+  const modal = document.createElement("div");
+  modal.className = "tab-modal-content";
+  modal.style.maxWidth = "95%";
+  modal.style.width = "900px";
+  modal.style.maxHeight = "90vh";
+  modal.style.display = "flex";
+  modal.style.flexDirection = "column";
+  
+  const title = document.createElement("h3");
+  title.className = "tab-modal-title";
+  title.textContent = `Steg 2: Välj Parent för ${type}`;
+  modal.appendChild(title);
+  
+  const info = document.createElement("p");
+  info.innerHTML = `
+    <strong>VIKTIGT: Varje rad MÅSTE ha en parent vald!</strong><br>
+    • Klicka på parent-cellen för att öppna dropdown<br>
+    • Välj ${type === "item" ? "Part" : "Item"} som parent för varje rad<br>
+    • Parent-ID från importfilen används INTE<br>
+    • Nya ID:n genereras automatiskt vid import
+  `;
+  info.style.marginBottom = "16px";
+  info.style.fontSize = "14px";
+  info.style.color = "#d63031";
+  info.style.fontWeight = "bold";
+  modal.appendChild(info);
+  
+  const tableContainer = document.createElement("div");
+  tableContainer.style.flex = "1";
+  tableContainer.style.minHeight = "300px";
+  tableContainer.style.maxHeight = "500px";
+  tableContainer.style.overflow = "auto";
+  tableContainer.style.border = "1px solid #ddd";
+  tableContainer.style.borderRadius = "6px";
+  tableContainer.style.marginBottom = "16px";
+  modal.appendChild(tableContainer);
+  
+  // Prepare rows with default parent
+  const rowsWithParent = selectedRows.map(row => ({
+    ...row,
+    _parentId: parentOptions[0].value, // Default to first option
+    _parentName: parentOptions[0].label
+  }));
+  
+  // Build parent values object for editorParams
+  const parentValues = {};
+  parentOptions.forEach(opt => {
+    parentValues[opt.value] = opt.label;
+  });
+  
+  const columns = [
+    {
+      title: type === "item" ? "Item Namn" : "Task Namn",
+      field: type === "item" ? "itm_name" : "tsk_name",
+      width: 250
+    },
+    {
+      title: `VÄLJ PARENT (${type === "item" ? "Part" : "Item"})`,
+      field: "_parentId",
+      editor: "list",
+      editorParams: {
+        values: parentValues,
+        clearable: false,
+        autocomplete: true,
+        listOnEmpty: true
+      },
+      formatter: (cell) => {
+        const val = cell.getValue();
+        const opt = parentOptions.find(o => o.value == val);
+        return opt ? opt.label : "⚠️ VÄLJ PARENT";
+      },
+      width: 400,
+      headerSort: false,
+      cellEdited: (cell) => {
+        const row = cell.getRow();
+        const data = row.getData();
+        data._parentId = cell.getValue();
+        const opt = parentOptions.find(o => o.value == data._parentId);
+        data._parentName = opt ? opt.label : "";
+        row.update(data);
       }
+    }
+  ];
+  
+  const parentTable = new Tabulator(tableContainer, {
+    data: rowsWithParent,
+    columns: columns,
+    layout: "fitDataFill",
+    height: "100%"
+  });
+  
+  const btnRow = document.createElement("div");
+  btnRow.className = "tab-modal-buttons";
+  btnRow.style.marginTop = "16px";
+  
+  const importBtn = document.createElement("button");
+  importBtn.className = "tab-modal-btn tab-modal-confirm";
+  importBtn.textContent = "Importera";
+  importBtn.onclick = () => {
+    const allRows = parentTable.getData();
+    const missingParent = allRows.some(row => !row._parentId);
+    
+    if (missingParent) {
+      alert("Alla rader måste ha en parent vald! Klicka på parent-cellen och välj från dropdownen.");
+      return;
     }
     
     overlay.remove();
-    onConfirm(selectedRows, type);
+    onConfirm(allRows);
   };
   btnRow.appendChild(importBtn);
   
@@ -469,7 +468,7 @@ export function showImportPreview(project, data, type, onConfirm) {
  * Import a single row with ID regeneration
  */
 function importSingleRow(project, data, type, tables) {
-  const parentId = data._parentId; // Parent selected in preview
+  const parentId = data._parentId;
   const withNewIds = regenerateIds(project, data, type, parentId);
   
   switch(type) {
@@ -522,12 +521,7 @@ function importSingleRow(project, data, type, tables) {
 }
 
 /**
- * Main import handler
- * @param {Object} project - Project object
- * @param {string} jsonString - JSON string to import
- * @param {Object} tables - { partTable, itemTable }
- * @param {Function} updatePartOptions - Function to update part options
- * @param {Function} applyPartFilter - Function to apply part filter
+ * Main import handler - orchestrates the two-step process
  */
 export function handleImport(project, jsonString, tables, updatePartOptions, applyPartFilter) {
   try {
@@ -542,19 +536,39 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
     
     const cleanedData = stripParentIdsAndTotals(rawData, type);
     
-    showImportPreview(project, cleanedData, type, (selectedRows, importType) => {
-      selectedRows.forEach(row => {
-        importSingleRow(project, row, importType, tables);
+    // STEG 1: Förhandsgranska och välj rader
+    showPreviewTable(project, cleanedData, type, (selectedRows) => {
+      
+      // För Parts: Importera direkt (ingen parent behövs)
+      if (type === "part" || type === "project") {
+        selectedRows.forEach(row => {
+          importSingleRow(project, row, type, tables);
+        });
+        
+        calcUtils.updateAllData(project);
+        tables.partTable.setData(project.prt_parts);
+        tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+        if (updatePartOptions) updatePartOptions();
+        if (applyPartFilter) applyPartFilter();
+        
+        alert(`Import slutförd! ${selectedRows.length} ${type}(s) importerade.`);
+        return;
+      }
+      
+      // STEG 2: För Items/Tasks - välj parent
+      showParentSelectionTable(project, selectedRows, type, (rowsWithParent) => {
+        rowsWithParent.forEach(row => {
+          importSingleRow(project, row, type, tables);
+        });
+        
+        calcUtils.updateAllData(project);
+        tables.partTable.setData(project.prt_parts);
+        tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+        if (updatePartOptions) updatePartOptions();
+        if (applyPartFilter) applyPartFilter();
+        
+        alert(`Import slutförd! ${rowsWithParent.length} ${type}(s) importerade.`);
       });
-      
-      calcUtils.updateAllData(project);
-      
-      tables.partTable.setData(project.prt_parts);
-      tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
-      if (updatePartOptions) updatePartOptions();
-      if (applyPartFilter) applyPartFilter();
-      
-      alert(`Import slutförd! ${selectedRows.length} ${importType}(s) importerade.`);
     });
     
   } catch (error) {
@@ -565,10 +579,6 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
 
 /**
  * Show import dialog with file upload or paste
- * @param {Object} project - Project object
- * @param {Object} tables - { partTable, itemTable }
- * @param {Function} updatePartOptions - Function to update part options
- * @param {Function} applyPartFilter - Function to apply part filter
  */
 export function showImportDialog(project, tables, updatePartOptions, applyPartFilter) {
   const overlay = document.createElement("div");
@@ -586,12 +596,16 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   
   const info = document.createElement("p");
   info.innerHTML = `
-    <strong>Importera Parts, Items eller Tasks från JSON.</strong><br>
-    • Välj vilka rader som ska importeras i förhandsgranskningen<br>
-    • Välj parent för Items/Tasks direkt i tabellen<br>
-    • Parent-ID från fil ignoreras alltid<br>
+    <strong>Importera Parts, Items eller Tasks från JSON.</strong><br><br>
+    <strong>Process:</strong><br>
+    1. Välj JSON-fil eller klistra in JSON<br>
+    2. Förhandsgranska och välj rader att importera<br>
+    3. Välj parent för Items/Tasks (Parts importeras direkt)<br>
+    4. Import genomförs med nya ID:n<br><br>
+    <strong>Viktigt:</strong><br>
+    • Parent-ID från fil ignoreras ALLTID<br>
     • Nya ID:n genereras automatiskt<br>
-    • Totalsummor räknas om
+    • Totalsummor räknas om automatiskt
   `;
   info.style.fontSize = "14px";
   info.style.marginBottom = "16px";
@@ -635,7 +649,7 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   
   const importBtn = document.createElement("button");
   importBtn.className = "tab-modal-btn tab-modal-confirm";
-  importBtn.textContent = "Förhandsgranska";
+  importBtn.textContent = "Starta Import";
   importBtn.onclick = () => {
     const jsonString = textarea.value.trim();
     if (!jsonString) {
@@ -663,7 +677,6 @@ export default {
   validateImportData,
   stripParentIdsAndTotals,
   regenerateIds,
-  showImportPreview,
   handleImport,
   showImportDialog
 };
