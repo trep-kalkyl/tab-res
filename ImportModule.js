@@ -168,16 +168,19 @@ export function regenerateIds(project, data, type, parentId = null) {
 function getParentOptions(project, type) {
   if (type === "item") {
     return (project.prt_parts || []).map(part => ({
-      value: part.prt_id,
-      label: `${part.prt_name} (ID: ${part.prt_id})`
+      id: part.prt_id,
+      name: part.prt_name,
+      displayName: `${part.prt_name} (ID: ${part.prt_id})`
     }));
   } else if (type === "task") {
     const items = [];
     (project.prt_parts || []).forEach(part => {
       (part.prt_items || []).forEach(item => {
         items.push({
-          value: item.itm_id,
-          label: `${item.itm_name} (Part: ${part.prt_name})`
+          id: item.itm_id,
+          name: item.itm_name,
+          displayName: `${item.itm_name} (Part: ${part.prt_name})`,
+          partName: part.prt_name
         });
       });
     });
@@ -326,8 +329,8 @@ function showPreviewTable(project, data, type, onContinue) {
 }
 
 /**
- * STEG 2: Välj parent för varje rad (endast för Items/Tasks)
- * Separat tabell där användaren MÅSTE välja parent från dropdown
+ * STEG 2: Välj parent för varje rad (med kryssrutor istället för dropdown)
+ * Varje rad som ska importeras får välja EN parent genom att kryssa i
  */
 function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const parentOptions = getParentOptions(project, type);
@@ -344,21 +347,21 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const modal = document.createElement("div");
   modal.className = "tab-modal-content";
   modal.style.maxWidth = "95%";
-  modal.style.width = "900px";
+  modal.style.width = "1200px";
   modal.style.maxHeight = "90vh";
   modal.style.display = "flex";
   modal.style.flexDirection = "column";
   
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
-  title.textContent = `Steg 2: Välj Parent för ${type}`;
+  title.textContent = `Steg 2: Välj Parent för varje ${type}`;
   modal.appendChild(title);
   
   const info = document.createElement("p");
   info.innerHTML = `
-    <strong>VIKTIGT: Varje rad MÅSTE ha en parent vald!</strong><br>
-    • Klicka på parent-cellen för att öppna dropdown<br>
-    • Välj ${type === "item" ? "Part" : "Item"} som parent för varje rad<br>
+    <strong>VIKTIGT: Varje rad MÅSTE ha EN parent vald!</strong><br>
+    • Klicka på en rad för att se tillgängliga parents nedan<br>
+    • Välj parent genom att kryssa i den<br>
     • Parent-ID från importfilen används INTE<br>
     • Nya ID:n genereras automatiskt vid import
   `;
@@ -368,69 +371,174 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   info.style.fontWeight = "bold";
   modal.appendChild(info);
   
-  const tableContainer = document.createElement("div");
-  tableContainer.style.flex = "1";
-  tableContainer.style.minHeight = "300px";
-  tableContainer.style.maxHeight = "500px";
-  tableContainer.style.overflow = "auto";
-  tableContainer.style.border = "1px solid #ddd";
-  tableContainer.style.borderRadius = "6px";
-  tableContainer.style.marginBottom = "16px";
-  modal.appendChild(tableContainer);
+  // Container för båda tabellerna
+  const tablesContainer = document.createElement("div");
+  tablesContainer.style.flex = "1";
+  tablesContainer.style.display = "flex";
+  tablesContainer.style.gap = "16px";
+  tablesContainer.style.minHeight = "400px";
+  tablesContainer.style.maxHeight = "500px";
+  modal.appendChild(tablesContainer);
   
-  // Prepare rows with default parent
-  const rowsWithParent = selectedRows.map(row => ({
+  // Vänster: Rader som ska importeras
+  const leftPanel = document.createElement("div");
+  leftPanel.style.flex = "1";
+  leftPanel.style.display = "flex";
+  leftPanel.style.flexDirection = "column";
+  leftPanel.style.minWidth = "300px";
+  
+  const leftTitle = document.createElement("h4");
+  leftTitle.textContent = `Rader att importera (${selectedRows.length})`;
+  leftTitle.style.margin = "0 0 8px 0";
+  leftPanel.appendChild(leftTitle);
+  
+  const leftTableDiv = document.createElement("div");
+  leftTableDiv.style.flex = "1";
+  leftTableDiv.style.border = "1px solid #ddd";
+  leftTableDiv.style.borderRadius = "6px";
+  leftTableDiv.style.overflow = "auto";
+  leftPanel.appendChild(leftTableDiv);
+  
+  // Höger: Tillgängliga parents
+  const rightPanel = document.createElement("div");
+  rightPanel.style.flex = "1";
+  rightPanel.style.display = "flex";
+  rightPanel.style.flexDirection = "column";
+  rightPanel.style.minWidth = "300px";
+  
+  const rightTitle = document.createElement("h4");
+  rightTitle.textContent = `Välj parent för markerad rad`;
+  rightTitle.style.margin = "0 0 8px 0";
+  rightPanel.appendChild(rightTitle);
+  
+  const rightTableDiv = document.createElement("div");
+  rightTableDiv.style.flex = "1";
+  rightTableDiv.style.border = "1px solid #ddd";
+  rightTableDiv.style.borderRadius = "6px";
+  rightTableDiv.style.overflow = "auto";
+  rightPanel.appendChild(rightTableDiv);
+  
+  tablesContainer.appendChild(leftPanel);
+  tablesContainer.appendChild(rightPanel);
+  
+  // State: Håll koll på vilken rad som är vald och dess parent
+  const rowParentMap = new Map(); // rowIndex -> parentId
+  let currentSelectedRowIndex = null;
+  
+  // Prepare rows with status
+  const rowsData = selectedRows.map((row, index) => ({
     ...row,
-    _parentId: parentOptions[0].value, // Default to first option
-    _parentName: parentOptions[0].label
+    _rowIndex: index,
+    _parentId: null,
+    _parentName: "⚠️ INGEN PARENT VALD",
+    _nameField: type === "item" ? row.itm_name : row.tsk_name
   }));
   
-  // Build parent values object for editorParams
-  const parentValues = {};
-  parentOptions.forEach(opt => {
-    parentValues[opt.value] = opt.label;
-  });
-  
-  const columns = [
+  // Vänster tabell: Rader att importera
+  const leftColumns = [
     {
       title: type === "item" ? "Item Namn" : "Task Namn",
-      field: type === "item" ? "itm_name" : "tsk_name",
+      field: "_nameField",
       width: 250
     },
     {
-      title: `VÄLJ PARENT (${type === "item" ? "Part" : "Item"})`,
-      field: "_parentId",
-      editor: "list",
-      editorParams: {
-        values: parentValues,
-        clearable: false,
-        autocomplete: true,
-        listOnEmpty: true
-      },
+      title: "Parent Status",
+      field: "_parentName",
       formatter: (cell) => {
         const val = cell.getValue();
-        const opt = parentOptions.find(o => o.value == val);
-        return opt ? opt.label : "⚠️ VÄLJ PARENT";
-      },
-      width: 400,
-      headerSort: false,
-      cellEdited: (cell) => {
-        const row = cell.getRow();
-        const data = row.getData();
-        data._parentId = cell.getValue();
-        const opt = parentOptions.find(o => o.value == data._parentId);
-        data._parentName = opt ? opt.label : "";
-        row.update(data);
+        if (val === "⚠️ INGEN PARENT VALD") {
+          return `<span style="color: #d63031; font-weight: bold;">${val}</span>`;
+        }
+        return `<span style="color: #00b894;">✓ ${val}</span>`;
       }
     }
   ];
   
-  const parentTable = new Tabulator(tableContainer, {
-    data: rowsWithParent,
-    columns: columns,
+  const leftTable = new Tabulator(leftTableDiv, {
+    data: rowsData,
+    columns: leftColumns,
+    layout: "fitDataFill",
+    height: "100%",
+    selectable: 1,
+    selectableRangeMode: "click"
+  });
+  
+  // Höger tabell: Parents att välja från
+  const parentColumns = [
+    {
+      title: "Välj",
+      field: "_selected",
+      formatter: "tickCross",
+      width: 60,
+      hozAlign: "center",
+      headerSort: false
+    },
+    {
+      title: type === "item" ? "Part Namn" : "Item Namn",
+      field: "displayName"
+    }
+  ];
+  
+  const rightTable = new Tabulator(rightTableDiv, {
+    data: [],
+    columns: parentColumns,
     layout: "fitDataFill",
     height: "100%"
   });
+  
+  // När man klickar på en rad i vänster tabell
+  leftTable.on("rowClick", (e, row) => {
+    const rowData = row.getData();
+    currentSelectedRowIndex = rowData._rowIndex;
+    
+    // Uppdatera höger tabell med parents
+    const parentsData = parentOptions.map(p => ({
+      ...p,
+      _selected: rowParentMap.get(currentSelectedRowIndex) === p.id
+    }));
+    
+    rightTable.setData(parentsData);
+    rightTitle.textContent = `Välj parent för: ${rowData._nameField}`;
+  });
+  
+  // När man klickar på en parent i höger tabell
+  rightTable.on("rowClick", (e, row) => {
+    if (currentSelectedRowIndex === null) {
+      alert("Välj först en rad från vänster tabell!");
+      return;
+    }
+    
+    const parentData = row.getData();
+    
+    // Uppdatera mapping
+    rowParentMap.set(currentSelectedRowIndex, parentData.id);
+    
+    // Uppdatera vänster tabell
+    const leftRow = leftTable.getRows()[currentSelectedRowIndex];
+    if (leftRow) {
+      const leftRowData = leftRow.getData();
+      leftRowData._parentId = parentData.id;
+      leftRowData._parentName = parentData.displayName;
+      leftRow.update(leftRowData);
+    }
+    
+    // Uppdatera höger tabell (markera vald parent)
+    rightTable.getData().forEach((p, idx) => {
+      rightTable.getRows()[idx].update({
+        ...p,
+        _selected: p.id === parentData.id
+      });
+    });
+  });
+  
+  // Välj första raden automatiskt
+  setTimeout(() => {
+    const firstRow = leftTable.getRows()[0];
+    if (firstRow) {
+      leftTable.selectRow(firstRow);
+      firstRow.getElement().click();
+    }
+  }, 100);
   
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
@@ -440,16 +548,17 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   importBtn.className = "tab-modal-btn tab-modal-confirm";
   importBtn.textContent = "Importera";
   importBtn.onclick = () => {
-    const allRows = parentTable.getData();
-    const missingParent = allRows.some(row => !row._parentId);
+    // Kontrollera att alla rader har parent
+    const allRowsData = leftTable.getData();
+    const missingParent = allRowsData.some(row => !row._parentId);
     
     if (missingParent) {
-      alert("Alla rader måste ha en parent vald! Klicka på parent-cellen och välj från dropdownen.");
+      alert("Alla rader måste ha en parent vald! Klicka på raden i vänster tabell, sedan välj parent i höger tabell.");
       return;
     }
     
     overlay.remove();
-    onConfirm(allRows);
+    onConfirm(allRowsData);
   };
   btnRow.appendChild(importBtn);
   
