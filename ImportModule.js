@@ -1,5 +1,5 @@
 // ImportModule.js
-// Handles import of Parts, Items, and Tasks with preview, row selection, and ID regeneration
+// Handles import of Parts, Items, and Tasks with preview, row selection, parent selection, and ID regeneration
 
 import * as calcUtils from "./projectCalcUtils.js";
 import * as ajaxHandler from "./ajaxHandler.js";
@@ -82,22 +82,18 @@ export function stripParentIdsAndTotals(data, type) {
   const cleaned = JSON.parse(JSON.stringify(data)); // Deep clone
   
   function cleanTask(task) {
-    delete task.tsk_itm_id; // Parent ID will be assigned during import
+    delete task.tsk_itm_id; // Parent ID ALWAYS removed
     delete task.tsk_material_user_price_total;
     delete task.tsk_work_task_duration_total;
-    delete task.tsk_comments; // Optional: remove comments
-    delete task.tsk_tags; // Optional: remove tags
     return task;
   }
   
   function cleanItem(item) {
-    delete item.itm_prt_id; // Parent ID will be assigned during import
+    delete item.itm_prt_id; // Parent ID ALWAYS removed
     delete item.itm_material_user_price;
     delete item.itm_work_task_duration;
     delete item.itm_material_user_price_total;
     delete item.itm_work_task_duration_total;
-    delete item.itm_comments; // Optional: remove comments
-    delete item.itm_tags; // Optional: remove tags
     if (item.itm_tasks && Array.isArray(item.itm_tasks)) {
       item.itm_tasks = item.itm_tasks.map(cleanTask);
     }
@@ -105,11 +101,9 @@ export function stripParentIdsAndTotals(data, type) {
   }
   
   function cleanPart(part) {
-    delete part.prt_prj_id; // Parent ID will be assigned during import
+    delete part.prt_prj_id; // Parent ID ALWAYS removed
     delete part.prt_material_user_price_total;
     delete part.prt_work_task_duration_total;
-    delete part.prt_comments; // Optional: remove comments
-    delete part.prt_tags; // Optional: remove tags
     if (part.prt_items && Array.isArray(part.prt_items)) {
       part.prt_items = part.prt_items.map(cleanItem);
     }
@@ -124,7 +118,6 @@ export function stripParentIdsAndTotals(data, type) {
     case 'part':
       return cleanPart(cleaned);
     case 'project':
-      // Import only parts, not project data
       if (cleaned.prt_parts && Array.isArray(cleaned.prt_parts)) {
         cleaned.prt_parts = cleaned.prt_parts.map(cleanPart);
       }
@@ -139,9 +132,10 @@ export function stripParentIdsAndTotals(data, type) {
  * @param {Object} project - Project object
  * @param {Object} data - Import data
  * @param {string} type - Import type
+ * @param {number} parentId - Parent ID (required for items/tasks)
  * @returns {Object} - Data with new IDs
  */
-export function regenerateIds(project, data, type) {
+export function regenerateIds(project, data, type, parentId = null) {
   const withNewIds = JSON.parse(JSON.stringify(data)); // Deep clone
   
   function regenerateTaskIds(item) {
@@ -172,7 +166,7 @@ export function regenerateIds(project, data, type) {
   function regeneratePartIds(part) {
     const newPartId = calcUtils.getNextPartId(project);
     part.prt_id = newPartId;
-    part.prt_prj_id = project.prj_id; // Link to project
+    part.prt_prj_id = project.prj_id;
     regenerateItemIds(part);
     return part;
   }
@@ -180,9 +174,11 @@ export function regenerateIds(project, data, type) {
   switch(type) {
     case 'task':
       withNewIds.tsk_id = calcUtils.getNextTaskId(project);
+      withNewIds.tsk_itm_id = parentId; // Set parent from user selection
       return withNewIds;
     case 'item':
       withNewIds.itm_id = calcUtils.getNextItemId(project);
+      withNewIds.itm_prt_id = parentId; // Set parent from user selection
       regenerateTaskIds(withNewIds);
       return withNewIds;
     case 'part':
@@ -198,13 +194,118 @@ export function regenerateIds(project, data, type) {
 }
 
 /**
+ * Shows parent selection dialog for items or tasks
+ * @param {Object} project - Project object
+ * @param {string} type - "item" or "task"
+ * @param {Function} onSelect - Callback with selected parent ID
+ */
+function showParentSelectionDialog(project, type, onSelect) {
+  const overlay = document.createElement("div");
+  overlay.className = "tab-modal-overlay active";
+  overlay.style.zIndex = 100000; // Higher than preview modal
+  
+  const modal = document.createElement("div");
+  modal.className = "tab-modal-content";
+  modal.style.maxWidth = "500px";
+  
+  const title = document.createElement("h3");
+  title.className = "tab-modal-title";
+  title.textContent = type === "item" ? "Välj Parent (Part)" : "Välj Parent (Item)";
+  modal.appendChild(title);
+  
+  const info = document.createElement("p");
+  info.textContent = `Parent-ID från importfilen ignoreras. Välj ${type === "item" ? "Part" : "Item"} att importera till:`;
+  info.style.marginBottom = "16px";
+  info.style.fontSize = "14px";
+  modal.appendChild(info);
+  
+  // Get available parents
+  let parents = [];
+  if (type === "item") {
+    parents = project.prt_parts || [];
+  } else if (type === "task") {
+    // Get all items from all parts
+    (project.prt_parts || []).forEach(part => {
+      (part.prt_items || []).forEach(item => {
+        parents.push({ ...item, partName: part.prt_name });
+      });
+    });
+  }
+  
+  if (parents.length === 0) {
+    const warning = document.createElement("p");
+    warning.textContent = `Ingen ${type === "item" ? "Part" : "Item"} hittades. Skapa en först!`;
+    warning.style.color = "red";
+    warning.style.fontWeight = "bold";
+    modal.appendChild(warning);
+    
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tab-modal-btn tab-modal-cancel";
+    closeBtn.textContent = "Stäng";
+    closeBtn.onclick = () => overlay.remove();
+    modal.appendChild(closeBtn);
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    return;
+  }
+  
+  // Create parent selection dropdown
+  const select = document.createElement("select");
+  select.style.width = "100%";
+  select.style.padding = "10px";
+  select.style.fontSize = "14px";
+  select.style.marginBottom = "16px";
+  select.style.border = "1px solid #ddd";
+  select.style.borderRadius = "6px";
+  
+  parents.forEach(parent => {
+    const option = document.createElement("option");
+    if (type === "item") {
+      option.value = parent.prt_id;
+      option.textContent = `${parent.prt_name} (ID: ${parent.prt_id})`;
+    } else {
+      option.value = parent.itm_id;
+      option.textContent = `${parent.itm_name} (Part: ${parent.partName}, ID: ${parent.itm_id})`;
+    }
+    select.appendChild(option);
+  });
+  
+  modal.appendChild(select);
+  
+  // Buttons
+  const btnRow = document.createElement("div");
+  btnRow.className = "tab-modal-buttons";
+  
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "tab-modal-btn tab-modal-confirm";
+  confirmBtn.textContent = "Välj";
+  confirmBtn.onclick = () => {
+    const selectedId = parseInt(select.value);
+    overlay.remove();
+    onSelect(selectedId);
+  };
+  btnRow.appendChild(confirmBtn);
+  
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "tab-modal-btn tab-modal-cancel";
+  cancelBtn.textContent = "Avbryt";
+  cancelBtn.onclick = () => overlay.remove();
+  btnRow.appendChild(cancelBtn);
+  
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+/**
  * Shows import preview modal with row selection
+ * @param {Object} project - Project object
  * @param {Object} data - Import data
  * @param {string} type - Import type
- * @param {Function} onConfirm - Callback with selected rows
+ * @param {Function} onConfirm - Callback with selected rows and parent ID
  */
-export function showImportPreview(data, type, onConfirm) {
-  // Create overlay
+export function showImportPreview(project, data, type, onConfirm) {
   const overlay = document.createElement("div");
   overlay.className = "tab-modal-overlay active";
   overlay.style.zIndex = 99999;
@@ -214,21 +315,24 @@ export function showImportPreview(data, type, onConfirm) {
   modal.style.maxWidth = "800px";
   modal.style.width = "90%";
   
-  // Title
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
   title.textContent = `Förhandsgranska import: ${type}`;
   modal.appendChild(title);
   
-  // Info text
   const info = document.createElement("p");
-  info.textContent = "Välj vilka rader du vill importera. Parent-ID:n kommer att tas bort och nya ID:n genereras automatiskt.";
+  info.innerHTML = `
+    <strong>Välj rader att importera</strong><br>
+    ${type !== "part" ? `• Du måste välja parent för varje rad<br>` : ""}
+    • Parent-ID från importfilen ignoreras<br>
+    • Nya ID:n genereras automatiskt<br>
+    • Totalsummor räknas om
+  `;
   info.style.marginBottom = "16px";
   info.style.fontSize = "14px";
-  info.style.color = "#555";
   modal.appendChild(info);
   
-  // Preview table container
+  // Preview table
   const tableContainer = document.createElement("div");
   tableContainer.style.maxHeight = "400px";
   tableContainer.style.overflowY = "auto";
@@ -236,12 +340,10 @@ export function showImportPreview(data, type, onConfirm) {
   tableContainer.style.borderRadius = "6px";
   tableContainer.style.marginBottom = "16px";
   
-  // Create preview table
   const table = document.createElement("table");
   table.style.width = "100%";
   table.style.borderCollapse = "collapse";
   
-  // Table header
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
   headerRow.style.background = "#f5f5f5";
@@ -255,7 +357,6 @@ export function showImportPreview(data, type, onConfirm) {
   selectAllTh.appendChild(selectAllCheckbox);
   headerRow.appendChild(selectAllTh);
   
-  // Add column headers based on type
   const columns = getColumnsForType(type);
   columns.forEach(col => {
     const th = document.createElement("th");
@@ -269,7 +370,6 @@ export function showImportPreview(data, type, onConfirm) {
   thead.appendChild(headerRow);
   table.appendChild(thead);
   
-  // Table body
   const tbody = document.createElement("tbody");
   const rows = getRowsFromData(data, type);
   const checkboxes = [];
@@ -279,7 +379,6 @@ export function showImportPreview(data, type, onConfirm) {
     tr.style.borderBottom = "1px solid #eee";
     if (idx % 2 === 0) tr.style.background = "#fafafa";
     
-    // Checkbox cell
     const selectTd = document.createElement("td");
     selectTd.style.padding = "10px";
     selectTd.style.textAlign = "center";
@@ -291,7 +390,6 @@ export function showImportPreview(data, type, onConfirm) {
     selectTd.appendChild(checkbox);
     tr.appendChild(selectTd);
     
-    // Data cells
     columns.forEach(col => {
       const td = document.createElement("td");
       td.style.padding = "10px";
@@ -306,7 +404,6 @@ export function showImportPreview(data, type, onConfirm) {
   tableContainer.appendChild(table);
   modal.appendChild(tableContainer);
   
-  // Select all functionality
   selectAllCheckbox.addEventListener("change", () => {
     checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
   });
@@ -329,8 +426,18 @@ export function showImportPreview(data, type, onConfirm) {
     }
     
     const selectedRows = selectedIndices.map(idx => rows[idx]);
-    overlay.remove();
-    onConfirm(selectedRows, type);
+    
+    // For items and tasks, show parent selection dialog
+    if (type === "item" || type === "task") {
+      overlay.remove();
+      showParentSelectionDialog(project, type, (parentId) => {
+        onConfirm(selectedRows, type, parentId);
+      });
+    } else {
+      // Parts don't need parent selection
+      overlay.remove();
+      onConfirm(selectedRows, type, null);
+    }
   };
   btnRow.appendChild(importBtn);
   
@@ -352,26 +459,27 @@ function getColumnsForType(type) {
   switch(type) {
     case 'part':
       return [
-        { title: "Part ID", field: "prt_id" },
+        { title: "Part ID (kommer ändras)", field: "prt_id" },
         { title: "Namn", field: "prt_name" },
         { title: "Antal Items", field: "itemCount" }
       ];
     case 'item':
       return [
-        { title: "Item ID", field: "itm_id" },
+        { title: "Item ID (kommer ändras)", field: "itm_id" },
         { title: "Namn", field: "itm_name" },
         { title: "Kategori", field: "itm_category" },
-        { title: "Antal", field: "itm_quantity" }
+        { title: "Antal", field: "itm_quantity" },
+        { title: "Antal Tasks", field: "taskCount" }
       ];
     case 'task':
       return [
-        { title: "Task ID", field: "tsk_id" },
+        { title: "Task ID (kommer ändras)", field: "tsk_id" },
         { title: "Namn", field: "tsk_name" },
         { title: "Quantity", field: "tsk_total_quantity" }
       ];
     case 'project':
       return [
-        { title: "Part ID", field: "prt_id" },
+        { title: "Part ID (kommer ändras)", field: "prt_id" },
         { title: "Namn", field: "prt_name" },
         { title: "Antal Items", field: "itemCount" }
       ];
@@ -392,68 +500,33 @@ function getRowsFromData(data, type) {
   }
   
   if (Array.isArray(data)) {
-    return data;
+    return data.map(item => {
+      if (type === 'item') {
+        return {
+          ...item,
+          taskCount: item.itm_tasks ? item.itm_tasks.length : 0
+        };
+      }
+      return item;
+    });
+  }
+  
+  // Single entity
+  if (type === 'item') {
+    return [{
+      ...data,
+      taskCount: data.itm_tasks ? data.itm_tasks.length : 0
+    }];
   }
   
   return [data];
 }
 
 /**
- * Main import handler
- * @param {Object} project - Project object
- * @param {string} jsonString - JSON string to import
- * @param {Object} tables - { partTable, itemTable }
- * @param {Function} updatePartOptions - Function to update part options
- * @param {Function} applyPartFilter - Function to apply part filter
- */
-export function handleImport(project, jsonString, tables, updatePartOptions, applyPartFilter) {
-  try {
-    // Parse JSON
-    const rawData = JSON.parse(jsonString);
-    
-    // Detect type
-    const type = detectImportType(rawData);
-    
-    // Validate
-    const validation = validateImportData(rawData, type);
-    if (!validation.valid) {
-      alert("Importfel:\n" + validation.errors.join("\n"));
-      return;
-    }
-    
-    // Strip parent IDs and totals
-    const cleanedData = stripParentIdsAndTotals(rawData, type);
-    
-    // Show preview with row selection
-    showImportPreview(cleanedData, type, (selectedRows, importType) => {
-      // Import selected rows
-      selectedRows.forEach(row => {
-        importSingleRow(project, row, importType, tables, updatePartOptions, applyPartFilter);
-      });
-      
-      // Recalculate all
-      calcUtils.updateAllData(project);
-      
-      // Refresh tables
-      tables.partTable.setData(project.prt_parts);
-      tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
-      if (updatePartOptions) updatePartOptions();
-      if (applyPartFilter) applyPartFilter();
-      
-      alert(`Import slutförd! ${selectedRows.length} ${importType}(s) importerade.`);
-    });
-    
-  } catch (error) {
-    console.error("Import error:", error);
-    alert("Importfel: " + error.message);
-  }
-}
-
-/**
  * Import a single row with ID regeneration
  */
-function importSingleRow(project, data, type, tables, updatePartOptions, applyPartFilter) {
-  const withNewIds = regenerateIds(project, data, type);
+function importSingleRow(project, data, type, parentId, tables) {
+  const withNewIds = regenerateIds(project, data, type, parentId);
   
   switch(type) {
     case 'part':
@@ -466,13 +539,12 @@ function importSingleRow(project, data, type, tables, updatePartOptions, applyPa
       break;
       
     case 'item':
-      // Add to first selected part
-      const targetPart = project.prt_parts.find(p => p.selected) || project.prt_parts[0];
+      const targetPart = project.prt_parts.find(p => p.prt_id === parentId);
       if (!targetPart) {
-        alert("Skapa först en Part för att importera Items");
+        alert("Vald Part hittades inte");
         return;
       }
-      withNewIds.itm_prt_id = targetPart.prt_id;
+      if (!targetPart.prt_items) targetPart.prt_items = [];
       targetPart.prt_items.push(withNewIds);
       ajaxHandler.queuedEchoAjax({ 
         action: "importItem", 
@@ -483,14 +555,17 @@ function importSingleRow(project, data, type, tables, updatePartOptions, applyPa
       break;
       
     case 'task':
-      // Add to first item in first selected part
-      const targetPart2 = project.prt_parts.find(p => p.selected) || project.prt_parts[0];
-      if (!targetPart2 || !targetPart2.prt_items || targetPart2.prt_items.length === 0) {
-        alert("Skapa först en Item för att importera Tasks");
+      // Find item in any part
+      let targetItem = null;
+      for (const part of project.prt_parts || []) {
+        targetItem = (part.prt_items || []).find(i => i.itm_id === parentId);
+        if (targetItem) break;
+      }
+      if (!targetItem) {
+        alert("Vald Item hittades inte");
         return;
       }
-      const targetItem = targetPart2.prt_items[0];
-      withNewIds.tsk_itm_id = targetItem.itm_id;
+      if (!targetItem.itm_tasks) targetItem.itm_tasks = [];
       targetItem.itm_tasks.push(withNewIds);
       ajaxHandler.queuedEchoAjax({ 
         action: "importTask", 
@@ -501,7 +576,6 @@ function importSingleRow(project, data, type, tables, updatePartOptions, applyPa
       break;
       
     case 'project':
-      // Import as part
       project.prt_parts.push(withNewIds);
       ajaxHandler.queuedEchoAjax({ 
         action: "importPart", 
@@ -509,6 +583,48 @@ function importSingleRow(project, data, type, tables, updatePartOptions, applyPa
         prt_name: withNewIds.prt_name 
       });
       break;
+  }
+}
+
+/**
+ * Main import handler
+ * @param {Object} project - Project object
+ * @param {string} jsonString - JSON string to import
+ * @param {Object} tables - { partTable, itemTable }
+ * @param {Function} updatePartOptions - Function to update part options
+ * @param {Function} applyPartFilter - Function to apply part filter
+ */
+export function handleImport(project, jsonString, tables, updatePartOptions, applyPartFilter) {
+  try {
+    const rawData = JSON.parse(jsonString);
+    const type = detectImportType(rawData);
+    
+    const validation = validateImportData(rawData, type);
+    if (!validation.valid) {
+      alert("Importfel:\n" + validation.errors.join("\n"));
+      return;
+    }
+    
+    const cleanedData = stripParentIdsAndTotals(rawData, type);
+    
+    showImportPreview(project, cleanedData, type, (selectedRows, importType, parentId) => {
+      selectedRows.forEach(row => {
+        importSingleRow(project, row, importType, parentId, tables);
+      });
+      
+      calcUtils.updateAllData(project);
+      
+      tables.partTable.setData(project.prt_parts);
+      tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
+      if (updatePartOptions) updatePartOptions();
+      if (applyPartFilter) applyPartFilter();
+      
+      alert(`Import slutförd! ${selectedRows.length} ${importType}(s) importerade.`);
+    });
+    
+  } catch (error) {
+    console.error("Import error:", error);
+    alert("Importfel: " + error.message);
   }
 }
 
@@ -536,17 +652,16 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   const info = document.createElement("p");
   info.innerHTML = `
     <strong>Importera Parts, Items eller Tasks från JSON.</strong><br>
-    • Endast valda rader kommer att importeras<br>
-    • Parent-ID:n tas bort automatiskt<br>
-    • Nya ID:n genereras för alla entiteter<br>
-    • Kommentarer och taggar rensas (valfritt)<br>
-    • Totalsummor räknas om automatiskt
+    • Välj vilka rader som ska importeras<br>
+    • <strong>För Items/Tasks: Välj parent efter förhandsgranskning</strong><br>
+    • Parent-ID från fil ignoreras alltid<br>
+    • Nya ID:n genereras automatiskt<br>
+    • Totalsummor räknas om
   `;
   info.style.fontSize = "14px";
   info.style.marginBottom = "16px";
   modal.appendChild(info);
   
-  // File input
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = ".json";
@@ -554,14 +669,12 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   fileInput.style.display = "block";
   modal.appendChild(fileInput);
   
-  // OR separator
   const orText = document.createElement("p");
   orText.textContent = "ELLER klistra in JSON:";
   orText.style.fontWeight = "bold";
   orText.style.marginTop = "16px";
   modal.appendChild(orText);
   
-  // Textarea for paste
   const textarea = document.createElement("textarea");
   textarea.className = "tab-modal-textarea";
   textarea.placeholder = "Klistra in JSON här...";
@@ -571,7 +684,6 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   textarea.style.fontSize = "12px";
   modal.appendChild(textarea);
   
-  // Handle file selection
   fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -583,7 +695,6 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
     reader.readAsText(file);
   });
   
-  // Buttons
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
   
