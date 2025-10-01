@@ -179,8 +179,9 @@ function getParentOptions(project, type) {
         items.push({
           id: item.itm_id,
           name: item.itm_name,
-          displayName: `${item.itm_name} (Part: ${part.prt_name})`,
-          partName: part.prt_name
+          partId: part.prt_id,
+          partName: part.prt_name,
+          displayName: `${item.itm_name} (ID: ${item.itm_id})` // Endast item info här
         });
       });
     });
@@ -346,7 +347,7 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   
   const modal = document.createElement("div");
   modal.className = "tab-modal-content";
-  modal.style.maxWidth = "700px";
+  modal.style.maxWidth = "800px";
   modal.style.width = "90%";
   
   const title = document.createElement("h3");
@@ -375,8 +376,8 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   parentTableDiv.style.marginBottom = "16px";
   modal.appendChild(parentTableDiv);
   
-  // Parent selection table
-  const parentColumns = [
+  // Parent selection table - olika kolumner beroende på type
+  let parentColumns = [
     {
       title: "Välj",
       field: "_selected",
@@ -384,16 +385,35 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
       width: 80,
       hozAlign: "center",
       headerSort: false
-    },
-    {
-      title: type === "item" ? "Part Namn" : "Item Namn",
-      field: "displayName",
-      headerFilter: "input"
     }
   ];
   
+  // För Tasks: lägg till Part-kolumn först, sedan Item
+  if (type === "task") {
+    parentColumns.push(
+      {
+        title: "Part",
+        field: "partName",
+        headerFilter: "input",
+        width: 200
+      },
+      {
+        title: "Item",
+        field: "displayName",
+        headerFilter: "input"
+      }
+    );
+  } else {
+    // För Items: bara Part-namn
+    parentColumns.push({
+      title: type === "item" ? "Part" : "Item",
+      field: "displayName",
+      headerFilter: "input"
+    });
+  }
+  
   const parentTable = new Tabulator(parentTableDiv, {
-    data: parentOptions.map(p => ({ ...p, _selected: false })), // Sätt initial data här!
+    data: parentOptions.map(p => ({ ...p, _selected: false })),
     columns: parentColumns,
     layout: "fitDataFill",
     height: "350px"
