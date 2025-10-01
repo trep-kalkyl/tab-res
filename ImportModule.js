@@ -329,8 +329,8 @@ function showPreviewTable(project, data, type, onContinue) {
 }
 
 /**
- * STEG 2: Välj parent för varje rad (med kryssrutor istället för dropdown)
- * Varje rad som ska importeras får välja EN parent genom att kryssa i
+ * STEG 2: Välj parent för varje rad
+ * Visa en rad i taget, välj parent med kryssrutor
  */
 function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const parentOptions = getParentOptions(project, type);
@@ -346,221 +346,180 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   
   const modal = document.createElement("div");
   modal.className = "tab-modal-content";
-  modal.style.maxWidth = "95%";
-  modal.style.width = "1200px";
-  modal.style.maxHeight = "90vh";
-  modal.style.display = "flex";
-  modal.style.flexDirection = "column";
+  modal.style.maxWidth = "700px";
+  modal.style.width = "90%";
   
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
-  title.textContent = `Steg 2: Välj Parent för varje ${type}`;
+  title.textContent = `Välj Parent för ${type}`;
   modal.appendChild(title);
   
-  const info = document.createElement("p");
-  info.innerHTML = `
-    <strong>VIKTIGT: Varje rad MÅSTE ha EN parent vald!</strong><br>
-    • Klicka på en rad för att se tillgängliga parents nedan<br>
-    • Välj parent genom att kryssa i den<br>
-    • Parent-ID från importfilen används INTE<br>
-    • Nya ID:n genereras automatiskt vid import
-  `;
-  info.style.marginBottom = "16px";
-  info.style.fontSize = "14px";
-  info.style.color = "#d63031";
-  info.style.fontWeight = "bold";
-  modal.appendChild(info);
-  
-  // Container för båda tabellerna
-  const tablesContainer = document.createElement("div");
-  tablesContainer.style.flex = "1";
-  tablesContainer.style.display = "flex";
-  tablesContainer.style.gap = "16px";
-  tablesContainer.style.minHeight = "400px";
-  tablesContainer.style.maxHeight = "500px";
-  modal.appendChild(tablesContainer);
-  
-  // Vänster: Rader som ska importeras
-  const leftPanel = document.createElement("div");
-  leftPanel.style.flex = "1";
-  leftPanel.style.display = "flex";
-  leftPanel.style.flexDirection = "column";
-  leftPanel.style.minWidth = "300px";
-  
-  const leftTitle = document.createElement("h4");
-  leftTitle.textContent = `Rader att importera (${selectedRows.length})`;
-  leftTitle.style.margin = "0 0 8px 0";
-  leftPanel.appendChild(leftTitle);
-  
-  const leftTableDiv = document.createElement("div");
-  leftTableDiv.style.flex = "1";
-  leftTableDiv.style.border = "1px solid #ddd";
-  leftTableDiv.style.borderRadius = "6px";
-  leftTableDiv.style.overflow = "auto";
-  leftPanel.appendChild(leftTableDiv);
-  
-  // Höger: Tillgängliga parents
-  const rightPanel = document.createElement("div");
-  rightPanel.style.flex = "1";
-  rightPanel.style.display = "flex";
-  rightPanel.style.flexDirection = "column";
-  rightPanel.style.minWidth = "300px";
-  
-  const rightTitle = document.createElement("h4");
-  rightTitle.textContent = `Välj parent för markerad rad`;
-  rightTitle.style.margin = "0 0 8px 0";
-  rightPanel.appendChild(rightTitle);
-  
-  const rightTableDiv = document.createElement("div");
-  rightTableDiv.style.flex = "1";
-  rightTableDiv.style.border = "1px solid #ddd";
-  rightTableDiv.style.borderRadius = "6px";
-  rightTableDiv.style.overflow = "auto";
-  rightPanel.appendChild(rightTableDiv);
-  
-  tablesContainer.appendChild(leftPanel);
-  tablesContainer.appendChild(rightPanel);
-  
-  // State: Håll koll på vilken rad som är vald och dess parent
+  // State management
+  let currentRowIndex = 0;
   const rowParentMap = new Map(); // rowIndex -> parentId
-  let currentSelectedRowIndex = null;
   
-  // Prepare rows with status
-  const rowsData = selectedRows.map((row, index) => ({
-    ...row,
-    _rowIndex: index,
-    _parentId: null,
-    _parentName: "⚠️ INGEN PARENT VALD",
-    _nameField: type === "item" ? row.itm_name : row.tsk_name
-  }));
+  // Current row display
+  const currentRowDiv = document.createElement("div");
+  currentRowDiv.style.padding = "16px";
+  currentRowDiv.style.background = "#f8f9fa";
+  currentRowDiv.style.borderRadius = "6px";
+  currentRowDiv.style.marginBottom = "16px";
+  modal.appendChild(currentRowDiv);
   
-  // Vänster tabell: Rader att importera
-  const leftColumns = [
-    {
-      title: type === "item" ? "Item Namn" : "Task Namn",
-      field: "_nameField",
-      width: 250
-    },
-    {
-      title: "Parent Status",
-      field: "_parentName",
-      formatter: (cell) => {
-        const val = cell.getValue();
-        if (val === "⚠️ INGEN PARENT VALD") {
-          return `<span style="color: #d63031; font-weight: bold;">${val}</span>`;
-        }
-        return `<span style="color: #00b894;">✓ ${val}</span>`;
-      }
-    }
-  ];
+  // Parent selection table container
+  const parentTableDiv = document.createElement("div");
+  parentTableDiv.style.maxHeight = "400px";
+  parentTableDiv.style.overflow = "auto";
+  parentTableDiv.style.border = "1px solid #ddd";
+  parentTableDiv.style.borderRadius = "6px";
+  parentTableDiv.style.marginBottom = "16px";
+  modal.appendChild(parentTableDiv);
   
-  const leftTable = new Tabulator(leftTableDiv, {
-    data: rowsData,
-    columns: leftColumns,
-    layout: "fitDataFill",
-    height: "100%",
-    selectable: 1,
-    selectableRangeMode: "click"
-  });
-  
-  // Höger tabell: Parents att välja från
+  // Parent selection table
   const parentColumns = [
     {
       title: "Välj",
       field: "_selected",
       formatter: "tickCross",
-      width: 60,
+      width: 80,
       hozAlign: "center",
       headerSort: false
     },
     {
       title: type === "item" ? "Part Namn" : "Item Namn",
-      field: "displayName"
+      field: "displayName",
+      headerFilter: "input"
     }
   ];
   
-  const rightTable = new Tabulator(rightTableDiv, {
+  const parentTable = new Tabulator(parentTableDiv, {
     data: [],
     columns: parentColumns,
     layout: "fitDataFill",
-    height: "100%"
+    height: "350px"
   });
   
-  // När man klickar på en rad i vänster tabell
-  leftTable.on("rowClick", (e, row) => {
-    const rowData = row.getData();
-    currentSelectedRowIndex = rowData._rowIndex;
-    
-    // Uppdatera höger tabell med parents
-    const parentsData = parentOptions.map(p => ({
-      ...p,
-      _selected: rowParentMap.get(currentSelectedRowIndex) === p.id
-    }));
-    
-    rightTable.setData(parentsData);
-    rightTitle.textContent = `Välj parent för: ${rowData._nameField}`;
-  });
-  
-  // När man klickar på en parent i höger tabell
-  rightTable.on("rowClick", (e, row) => {
-    if (currentSelectedRowIndex === null) {
-      alert("Välj först en rad från vänster tabell!");
-      return;
-    }
-    
+  // Click on parent row to select
+  parentTable.on("rowClick", (e, row) => {
     const parentData = row.getData();
     
-    // Uppdatera mapping
-    rowParentMap.set(currentSelectedRowIndex, parentData.id);
+    // Save selection
+    rowParentMap.set(currentRowIndex, parentData.id);
     
-    // Uppdatera vänster tabell
-    const leftRow = leftTable.getRows()[currentSelectedRowIndex];
-    if (leftRow) {
-      const leftRowData = leftRow.getData();
-      leftRowData._parentId = parentData.id;
-      leftRowData._parentName = parentData.displayName;
-      leftRow.update(leftRowData);
-    }
-    
-    // Uppdatera höger tabell (markera vald parent)
-    rightTable.getData().forEach((p, idx) => {
-      rightTable.getRows()[idx].update({
+    // Update checkboxes
+    const allParents = parentTable.getData();
+    allParents.forEach((p, idx) => {
+      parentTable.getRows()[idx].update({
         ...p,
         _selected: p.id === parentData.id
       });
     });
+    
+    // Move to next row automatically
+    setTimeout(() => {
+      if (currentRowIndex < selectedRows.length - 1) {
+        nextBtn.click();
+      } else {
+        // Last row - enable finish button
+        finishBtn.disabled = false;
+        finishBtn.style.opacity = "1";
+      }
+    }, 300);
   });
   
-  // Välj första raden automatiskt
-  setTimeout(() => {
-    const firstRow = leftTable.getRows()[0];
-    if (firstRow) {
-      leftTable.selectRow(firstRow);
-      firstRow.getElement().click();
-    }
-  }, 100);
-  
-  const btnRow = document.createElement("div");
-  btnRow.className = "tab-modal-buttons";
-  btnRow.style.marginTop = "16px";
-  
-  const importBtn = document.createElement("button");
-  importBtn.className = "tab-modal-btn tab-modal-confirm";
-  importBtn.textContent = "Importera";
-  importBtn.onclick = () => {
-    // Kontrollera att alla rader har parent
-    const allRowsData = leftTable.getData();
-    const missingParent = allRowsData.some(row => !row._parentId);
+  // Function to render current row
+  function renderCurrentRow() {
+    const currentRow = selectedRows[currentRowIndex];
+    const rowName = type === "item" ? currentRow.itm_name : currentRow.tsk_name;
     
-    if (missingParent) {
-      alert("Alla rader måste ha en parent vald! Klicka på raden i vänster tabell, sedan välj parent i höger tabell.");
+    currentRowDiv.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="font-size: 18px;">${rowName}</strong>
+          <div style="color: #666; margin-top: 4px;">Rad ${currentRowIndex + 1} av ${selectedRows.length}</div>
+        </div>
+        <div style="font-size: 14px; color: ${rowParentMap.has(currentRowIndex) ? '#00b894' : '#d63031'};">
+          ${rowParentMap.has(currentRowIndex) ? '✓ Parent vald' : '⚠️ Välj parent nedan'}
+        </div>
+      </div>
+    `;
+    
+    // Update parent table
+    const parentsData = parentOptions.map(p => ({
+      ...p,
+      _selected: rowParentMap.get(currentRowIndex) === p.id
+    }));
+    parentTable.setData(parentsData);
+  }
+  
+  // Navigation buttons
+  const navRow = document.createElement("div");
+  navRow.style.display = "flex";
+  navRow.style.justifyContent = "space-between";
+  navRow.style.marginBottom = "16px";
+  
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "tab-modal-btn";
+  prevBtn.textContent = "← Föregående";
+  prevBtn.disabled = true;
+  prevBtn.onclick = () => {
+    if (currentRowIndex > 0) {
+      currentRowIndex--;
+      renderCurrentRow();
+      prevBtn.disabled = currentRowIndex === 0;
+      nextBtn.disabled = false;
+    }
+  };
+  navRow.appendChild(prevBtn);
+  
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "tab-modal-btn tab-modal-confirm";
+  nextBtn.textContent = "Nästa →";
+  nextBtn.onclick = () => {
+    if (!rowParentMap.has(currentRowIndex)) {
+      alert("Välj en parent först!");
       return;
     }
     
-    overlay.remove();
-    onConfirm(allRowsData);
+    if (currentRowIndex < selectedRows.length - 1) {
+      currentRowIndex++;
+      renderCurrentRow();
+      prevBtn.disabled = false;
+      nextBtn.disabled = currentRowIndex === selectedRows.length - 1;
+    }
   };
-  btnRow.appendChild(importBtn);
+  navRow.appendChild(nextBtn);
+  
+  modal.appendChild(navRow);
+  
+  // Final buttons
+  const btnRow = document.createElement("div");
+  btnRow.className = "tab-modal-buttons";
+  
+  const finishBtn = document.createElement("button");
+  finishBtn.className = "tab-modal-btn tab-modal-confirm";
+  finishBtn.textContent = "Slutför Import";
+  finishBtn.disabled = true;
+  finishBtn.style.opacity = "0.5";
+  finishBtn.onclick = () => {
+    // Check all rows have parent
+    for (let i = 0; i < selectedRows.length; i++) {
+      if (!rowParentMap.has(i)) {
+        alert(`Rad ${i + 1} saknar parent! Gå tillbaka och välj.`);
+        return;
+      }
+    }
+    
+    // Add parent to each row
+    const rowsWithParent = selectedRows.map((row, idx) => ({
+      ...row,
+      _parentId: rowParentMap.get(idx)
+    }));
+    
+    overlay.remove();
+    onConfirm(rowsWithParent);
+  };
+  btnRow.appendChild(finishBtn);
   
   const cancelBtn = document.createElement("button");
   cancelBtn.className = "tab-modal-btn tab-modal-cancel";
@@ -571,6 +530,9 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   modal.appendChild(btnRow);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+  
+  // Initialize first row
+  renderCurrentRow();
 }
 
 /**
