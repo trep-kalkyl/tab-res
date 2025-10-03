@@ -149,6 +149,9 @@ function showNestedPreview(project, data, type, onContinue) {
   else if (type === "task") rows = [data];
   else rows = [data];
 
+  // Store references to all nested tables for data collection
+  const nestedTables = new Map(); // partId -> { itemsTable: Tabulator, taskTables: Map<itemId, Tabulator> }
+
   let previewTable;
   if (type === "item") {
     previewTable = new Tabulator(tableContainer, {
@@ -218,6 +221,8 @@ function showNestedPreview(project, data, type, onContinue) {
       height: "100%",
       rowFormatter: function(partRow) {
         const partData = partRow.getData();
+        const partId = partData.prt_id;
+        
         let holder = partRow.getElement().querySelector(".subtable-holder");
         if (!holder) {
           holder = document.createElement("div");
@@ -230,6 +235,7 @@ function showNestedPreview(project, data, type, onContinue) {
           if (partData.prt_items && partData.prt_items.length > 0) {
             const itemsTableDiv = document.createElement("div");
             holder.appendChild(itemsTableDiv);
+            
             const itemsTable = new Tabulator(itemsTableDiv, {
               data: partData.prt_items.map(i => ({ ...i, _selected: true })),
               columns: itemColumns,
@@ -237,6 +243,8 @@ function showNestedPreview(project, data, type, onContinue) {
               height: "100%",
               rowFormatter: function(itemRow) {
                 const itemData = itemRow.getData();
+                const itemId = itemData.itm_id;
+                
                 let taskHolder = itemRow.getElement().querySelector(".subtable-holder");
                 if (!taskHolder) {
                   taskHolder = document.createElement("div");
@@ -244,20 +252,34 @@ function showNestedPreview(project, data, type, onContinue) {
                   taskHolder.style.display = "none";
                   taskHolder.style.marginLeft = "30px";
                   itemRow.getElement().appendChild(taskHolder);
+                  
                   // Tasks subtable
                   if (itemData.itm_tasks && itemData.itm_tasks.length > 0) {
                     const tasksTableDiv = document.createElement("div");
                     taskHolder.appendChild(tasksTableDiv);
-                    new Tabulator(tasksTableDiv, {
+                    
+                    const tasksTable = new Tabulator(tasksTableDiv, {
                       data: itemData.itm_tasks.map(t => ({ ...t, _selected: true })),
                       columns: taskColumns,
                       layout: "fitDataFill",
                       height: "100%",
                     });
+                    
+                    // Store reference to task table
+                    if (!nestedTables.has(partId)) {
+                      nestedTables.set(partId, { itemsTable: null, taskTables: new Map() });
+                    }
+                    nestedTables.get(partId).taskTables.set(itemId, tasksTable);
                   }
                 }
               }
             });
+            
+            // Store reference to items table
+            if (!nestedTables.has(partId)) {
+              nestedTables.set(partId, { itemsTable: null, taskTables: new Map() });
+            }
+            nestedTables.get(partId).itemsTable = itemsTable;
           }
         }
       }
@@ -273,30 +295,67 @@ function showNestedPreview(project, data, type, onContinue) {
   continueBtn.textContent = "Nästa";
   continueBtn.onclick = () => {
     let selectedRows = [];
+    
     if (type === "item" || type === "task") {
       selectedRows = previewTable.getData().filter(r => r._selected);
     } else {
+      // NESTED DATA COLLECTION - hämta data från alla subtabeller
       const partRows = previewTable.getData().filter(r => r._selected);
+      
       partRows.forEach(part => {
-        // Deep clone av part, items, tasks - FIX FÖR NESTED DATA
-        const partCopy = {
-          ...part,
-          prt_items: (Array.isArray(part.prt_items)
-            ? part.prt_items.filter(i => i._selected).map(item => ({
-                ...item,
-                itm_tasks: Array.isArray(item.itm_tasks)
-                  ? item.itm_tasks.filter(t => t._selected).map(task => ({ ...task }))
-                  : []
-              }))
-            : [])
-        };
+        const partId = part.prt_id;
+        const partCopy = { ...part };
+        
+        // Hämta items från subtabell om den finns
+        const nestedTableData = nestedTables.get(partId);
+        if (nestedTableData && nestedTableData.itemsTable) {
+          const itemsData = nestedTableData.itemsTable.getData();
+          const selectedItems = itemsData.filter(item => item._selected);
+          
+          partCopy.prt_items = selectedItems.map(item => {
+            const itemCopy = { ...item };
+            
+            // Hämta tasks från subtabell om den finns
+            const taskTable = nestedTableData.taskTables.get(item.itm_id);
+            if (taskTable) {
+              const tasksData = taskTable.getData();
+              const selectedTasks = tasksData.filter(task => task._selected);
+              itemCopy.itm_tasks = selectedTasks;
+            } else {
+              // Fallback till ursprunglig data om subtabell inte finns
+              itemCopy.itm_tasks = (item.itm_tasks || []).filter(t => t._selected !== false);
+            }
+            
+            return itemCopy;
+          });
+        } else {
+          // Fallback till ursprunglig data om subtabell inte finns
+          partCopy.prt_items = (part.prt_items || []).filter(i => i._selected !== false).map(item => ({
+            ...item,
+            itm_tasks: (item.itm_tasks || []).filter(t => t._selected !== false)
+          }));
+        }
+        
         selectedRows.push(partCopy);
       });
     }
+    
     if (selectedRows.length === 0) {
       alert("Välj minst en rad att importera");
       return;
     }
+    
+    // Debug log
+    console.log("Selected rows for import:", selectedRows);
+    selectedRows.forEach(part => {
+      if (part.prt_items) {
+        console.log(`Part ${part.prt_name} has ${part.prt_items.length} items`);
+        part.prt_items.forEach(item => {
+          console.log(`  Item ${item.itm_name} has ${(item.itm_tasks || []).length} tasks`);
+        });
+      }
+    });
+    
     overlay.remove();
     onContinue(selectedRows);
   };
