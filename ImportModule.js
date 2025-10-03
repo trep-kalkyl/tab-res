@@ -760,11 +760,23 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
         // Skicka sammanfattningsrapport
         ajaxHandler.queuedEchoAjax(importStats);
         
+        // Uppdatera kalkyler
         calcUtils.updateAllData(project);
+        
+        // NYTT: Skicka uppdaterade projekttotaler
+        ajaxHandler.queuedEchoAjax({
+          action: "updateProjectTotals",
+          prj_id: project.prj_id,
+          material_total: project.prj_material_user_price_total || 0,
+          work_total: project.prj_work_task_duration_total || 0
+        });
+        
+        // Uppdatera tabeller
         tables.partTable.setData(project.prt_parts);
         tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
         if (updatePartOptions) updatePartOptions();
         if (applyPartFilter) applyPartFilter();
+        
         alert(`Import slutförd! ${selectedRows.length} ${type}(s) importerade.`);
         return;
       }
@@ -783,9 +795,19 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
         
         rowsWithParent.forEach(row => importSingleRow(project, row, type, tables));
         
+        // Uppdatera kalkyler
+        calcUtils.updateAllData(project);
+        
+        // NYTT: Skicka uppdaterade projekttotaler
+        ajaxHandler.queuedEchoAjax({
+          action: "updateProjectTotals",
+          prj_id: project.prj_id,
+          material_total: project.prj_material_user_price_total || 0,
+          work_total: project.prj_work_task_duration_total || 0
+        });
+        
         ajaxHandler.queuedEchoAjax(importStats);
         
-        calcUtils.updateAllData(project);
         tables.partTable.setData(project.prt_parts);
         tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
         if (updatePartOptions) updatePartOptions();
