@@ -1,6 +1,7 @@
 // ImportModule.js
 // Handles import of Parts, Items, and Tasks with nested preview (expandable subtables for Items and Tasks),
 // plus separated parent selection UI for Items/Tasks.
+// Enhanced with drag & drop support and progress feedback.
 
 import * as calcUtils from "./projectCalcUtils.js";
 import * as ajaxHandler from "./ajaxHandler.js";
@@ -96,6 +97,129 @@ function getParentOptions(project, type) {
     return items;
   }
   return [];
+}
+
+/** --- PROGRESS FEEDBACK --- */
+function showProgressIndicator(current, total, itemName) {
+  let progressEl = document.getElementById('import-progress');
+  if (!progressEl) {
+    progressEl = document.createElement('div');
+    progressEl.id = 'import-progress';
+    progressEl.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 100000;
+      min-width: 280px;
+    `;
+    document.body.appendChild(progressEl);
+  }
+  
+  const percentage = Math.round((current / total) * 100);
+  progressEl.innerHTML = `
+    <div style="margin-bottom: 8px; font-weight: bold;">Importerar...</div>
+    <div style="background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+      <div style="background: #4a90e2; height: 6px; width: ${percentage}%; transition: width 0.3s;"></div>
+    </div>
+    <div style="font-size: 13px; color: #666;">
+      ${current}/${total} - ${itemName}
+    </div>
+  `;
+  
+  if (current >= total) {
+    setTimeout(() => {
+      if (progressEl && progressEl.parentNode) {
+        progressEl.parentNode.removeChild(progressEl);
+      }
+    }, 1500);
+  }
+}
+
+/** --- DRAG & DROP SUPPORT --- */
+function setupDragDrop(textarea, fileInput) {
+  const dropZone = document.createElement('div');
+  dropZone.className = 'drop-zone';
+  dropZone.style.cssText = `
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    margin-bottom: 16px;
+    background: #fafafa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  `;
+  
+  dropZone.innerHTML = `
+    <div style="font-size: 24px; margin-bottom: 12px;">📁</div>
+    <div style="font-weight: bold; margin-bottom: 8px;">Dra och släpp JSON-fil här</div>
+    <div style="color: #666; font-size: 14px;">eller klicka för att välja fil</div>
+  `;
+  
+  // Insert before textarea
+  textarea.parentNode.insertBefore(dropZone, textarea);
+  
+  dropZone.addEventListener('click', () => fileInput.click());
+  
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#4a90e2';
+    dropZone.style.background = '#f0f8ff';
+  });
+  
+  dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#ddd';
+    dropZone.style.background = '#fafafa';
+  });
+  
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#ddd';
+    dropZone.style.background = '#fafafa';
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.endsWith('.json')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        textarea.value = event.target.result;
+        // Visual feedback
+        dropZone.style.borderColor = '#28a745';
+        dropZone.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 12px;">✅</div>
+          <div style="color: #28a745; font-weight: bold;">Fil laddad: ${files[0].name}</div>
+        `;
+        setTimeout(() => {
+          dropZone.style.borderColor = '#ddd';
+          dropZone.innerHTML = `
+            <div style="font-size: 24px; margin-bottom: 12px;">📁</div>
+            <div style="font-weight: bold; margin-bottom: 8px;">Dra och släpp JSON-fil här</div>
+            <div style="color: #666; font-size: 14px;">eller klicka för att välja fil</div>
+          `;
+        }, 2000);
+      };
+      reader.readAsText(files[0]);
+    } else {
+      dropZone.style.borderColor = '#dc3545';
+      dropZone.innerHTML = `
+        <div style="font-size: 24px; margin-bottom: 12px;">❌</div>
+        <div style="color: #dc3545; font-weight: bold;">Endast JSON-filer tillåtna</div>
+      `;
+      setTimeout(() => {
+        dropZone.style.borderColor = '#ddd';
+        dropZone.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 12px;">📁</div>
+          <div style="font-weight: bold; margin-bottom: 8px;">Dra och släpp JSON-fil här</div>
+          <div style="color: #666; font-size: 14px;">eller klicka för att välja fil</div>
+        `;
+      }, 2000);
+    }
+  });
 }
 
 /** --- NESTED PREVIEW: Parts → Items → Tasks --- */
@@ -437,7 +561,7 @@ function showNestedPreview(project, data, type, onContinue) {
   document.body.appendChild(overlay);
 }
 
-/** --- Parent selection table, importSingleRow, handleImport, showImportDialog --- */
+/** --- FÖRBÄTTRAD PARENT SELECTION (utan onödig "Nästa"-knapp) --- */
 function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const parentOptions = getParentOptions(project, type);
 
@@ -454,14 +578,27 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   modal.className = "tab-modal-content";
   modal.style.maxWidth = "800px";
   modal.style.width = "90%";
+  
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
-  title.textContent = `Välj Parent för ${type}`;
+  title.textContent = `Steg 2: Välj Parent för ${type.charAt(0).toUpperCase() + type.slice(1)}s`;
   modal.appendChild(title);
+
+  const info = document.createElement("p");
+  info.innerHTML = `
+    <strong>Välj parent för varje ${type}:</strong><br>
+    • Klicka på en rad för att välja parent<br>
+    • Använd sökfiltret för att hitta rätt parent<br>
+    • ${selectedRows.length} st ${type}s kommer att importeras
+  `;
+  info.style.marginBottom = "16px";
+  info.style.fontSize = "14px";
+  modal.appendChild(info);
 
   let currentRowIndex = 0;
   const rowParentMap = new Map();
 
+  // Current row display
   const currentRowDiv = document.createElement("div");
   currentRowDiv.style.padding = "16px";
   currentRowDiv.style.background = "#f8f9fa";
@@ -469,6 +606,7 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   currentRowDiv.style.marginBottom = "16px";
   modal.appendChild(currentRowDiv);
 
+  // Parent table
   const parentTableDiv = document.createElement("div");
   parentTableDiv.style.maxHeight = "400px";
   parentTableDiv.style.overflow = "auto";
@@ -519,6 +657,8 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   parentTable.on("rowClick", (e, row) => {
     const parentData = row.getData();
     rowParentMap.set(currentRowIndex, parentData.id);
+    
+    // Update selection visual
     const allParents = parentTable.getData();
     allParents.forEach((p, idx) => {
       parentTable.getRows()[idx].update({
@@ -526,41 +666,59 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
         _selected: p.id === parentData.id
       });
     });
+    
+    // Auto-advance to next row or enable finish
     setTimeout(() => {
       if (currentRowIndex < selectedRows.length - 1) {
-        nextBtn.click();
+        currentRowIndex++;
+        renderCurrentRow();
       } else {
         finishBtn.disabled = false;
         finishBtn.style.opacity = "1";
+        finishBtn.textContent = "✅ Slutför Import";
       }
-    }, 300);
+    }, 200);
   });
 
   function renderCurrentRow() {
     const currentRow = selectedRows[currentRowIndex];
     const rowName = type === "item" ? currentRow.itm_name : currentRow.tsk_name;
+    const hasParent = rowParentMap.has(currentRowIndex);
+    
     currentRowDiv.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <strong style="font-size: 18px;">${rowName}</strong>
-          <div style="color: #666; margin-top: 4px;">Rad ${currentRowIndex + 1} av ${selectedRows.length}</div>
+          <div style="color: #666; margin-top: 4px;">
+            ${type.charAt(0).toUpperCase() + type.slice(1)} ${currentRowIndex + 1} av ${selectedRows.length}
+          </div>
         </div>
-        <div style="font-size: 14px; color: ${rowParentMap.has(currentRowIndex) ? '#00b894' : '#d63031'};">
-          ${rowParentMap.has(currentRowIndex) ? '✓ Parent vald' : '⚠️ Välj parent nedan'}
+        <div style="font-size: 14px; color: ${hasParent ? '#28a745' : '#dc3545'};">
+          ${hasParent ? '✅ Parent vald' : '⚠️ Välj parent nedan'}
         </div>
       </div>
     `;
+    
+    // Update parent table selection
     const parentsData = parentOptions.map(p => ({
       ...p,
       _selected: rowParentMap.get(currentRowIndex) === p.id
     }));
     parentTable.setData(parentsData);
+    
+    // Update progress in finish button
+    const completedCount = Array.from(rowParentMap.keys()).length;
+    finishBtn.textContent = completedCount === selectedRows.length 
+      ? "✅ Slutför Import" 
+      : `Slutför Import (${completedCount}/${selectedRows.length})`;
   }
 
+  // Navigation buttons (simplified - no confusing "Nästa")
   const navRow = document.createElement("div");
   navRow.style.display = "flex";
   navRow.style.justifyContent = "space-between";
   navRow.style.marginBottom = "16px";
+  
   const prevBtn = document.createElement("button");
   prevBtn.className = "tab-modal-btn";
   prevBtn.textContent = "← Föregående";
@@ -570,63 +728,90 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
       currentRowIndex--;
       renderCurrentRow();
       prevBtn.disabled = currentRowIndex === 0;
-      nextBtn.disabled = false;
     }
   };
   navRow.appendChild(prevBtn);
-  const nextBtn = document.createElement("button");
-  nextBtn.className = "tab-modal-btn tab-modal-confirm";
-  nextBtn.textContent = "Nästa →";
-  nextBtn.onclick = () => {
-    if (!rowParentMap.has(currentRowIndex)) {
-      alert("Välj en parent först!");
-      return;
-    }
+  
+  // Progress info
+  const progressInfo = document.createElement("div");
+  progressInfo.style.display = "flex";
+  progressInfo.style.alignItems = "center";
+  progressInfo.style.fontSize = "14px";
+  progressInfo.style.color = "#666";
+  progressInfo.textContent = "Klicka på en parent-rad för att välja";
+  navRow.appendChild(progressInfo);
+  
+  const skipBtn = document.createElement("button");
+  skipBtn.className = "tab-modal-btn";
+  skipBtn.textContent = "Hoppa över →";
+  skipBtn.style.background = "#ffc107";
+  skipBtn.onclick = () => {
     if (currentRowIndex < selectedRows.length - 1) {
       currentRowIndex++;
       renderCurrentRow();
       prevBtn.disabled = false;
-      nextBtn.disabled = currentRowIndex === selectedRows.length - 1;
     }
   };
-  navRow.appendChild(nextBtn);
+  navRow.appendChild(skipBtn);
+  
   modal.appendChild(navRow);
 
+  // Finish button
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
   const finishBtn = document.createElement("button");
   finishBtn.className = "tab-modal-btn tab-modal-confirm";
-  finishBtn.textContent = "Slutför Import";
+  finishBtn.textContent = "Slutför Import (0/" + selectedRows.length + ")";
   finishBtn.disabled = true;
   finishBtn.style.opacity = "0.5";
   finishBtn.onclick = () => {
+    // Check if all rows have parents
+    const missingParents = [];
     for (let i = 0; i < selectedRows.length; i++) {
       if (!rowParentMap.has(i)) {
-        alert(`Rad ${i + 1} saknar parent! Gå tillbaka och välj.`);
-        return;
+        missingParents.push(i + 1);
       }
     }
-    const rowsWithParent = selectedRows.map((row, idx) => ({
-      ...row,
-      _parentId: rowParentMap.get(idx)
-    }));
+    
+    if (missingParents.length > 0) {
+      const confirm = window.confirm(
+        `${missingParents.length} st ${type}s saknar parent (rad ${missingParents.join(', ')}).\n\n` +
+        `Vill du importera endast de ${rowParentMap.size} st som har parent?`
+      );
+      if (!confirm) return;
+    }
+    
+    // Filter to only rows with parents
+    const rowsWithParent = selectedRows
+      .map((row, idx) => rowParentMap.has(idx) ? { ...row, _parentId: rowParentMap.get(idx) } : null)
+      .filter(Boolean);
+    
+    if (rowsWithParent.length === 0) {
+      alert("Inga rader kan importeras - alla saknar parent!");
+      return;
+    }
+    
     overlay.remove();
     onConfirm(rowsWithParent);
   };
   btnRow.appendChild(finishBtn);
+  
   const cancelBtn = document.createElement("button");
   cancelBtn.className = "tab-modal-btn tab-modal-cancel";
   cancelBtn.textContent = "Avbryt";
   cancelBtn.onclick = () => overlay.remove();
   btnRow.appendChild(cancelBtn);
+  
   modal.appendChild(btnRow);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+  
+  // Initialize first row
   setTimeout(() => renderCurrentRow(), 100);
 }
 
-// FÖRBÄTTRAD AJAX-HANTERING FÖR NESTED IMPORT (Lösning 1)
-function importSingleRow(project, data, type, tables) {
+// FÖRBÄTTRAD AJAX-HANTERING FÖR NESTED IMPORT (med progress)
+function importSingleRow(project, data, type, tables, progressCallback) {
   const parentId = data._parentId;
   const withNewIds = regenerateIds(project, data, type, parentId);
   
@@ -718,6 +903,13 @@ function importSingleRow(project, data, type, tables) {
       });
       break;
   }
+  
+  // Progress callback
+  if (progressCallback) {
+    const itemName = type === 'part' ? withNewIds.prt_name : 
+                     type === 'item' ? withNewIds.itm_name : withNewIds.tsk_name;
+    progressCallback(itemName);
+  }
 }
 
 export function handleImport(project, jsonString, tables, updatePartOptions, applyPartFilter) {
@@ -740,8 +932,17 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
           details: []
         };
         
+        // Progress tracking
+        let currentRow = 0;
+        const totalRows = selectedRows.length;
+        
         selectedRows.forEach(row => {
-          importSingleRow(project, row, type, tables);
+          currentRow++;
+          showProgressIndicator(currentRow, totalRows, row.prt_name || `${type} ${currentRow}`);
+          
+          importSingleRow(project, row, type, tables, (itemName) => {
+            showProgressIndicator(currentRow, totalRows, itemName);
+          });
           
           // Räkna statistik
           importStats.imported_parts++;
@@ -793,7 +994,19 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
           }))
         };
         
-        rowsWithParent.forEach(row => importSingleRow(project, row, type, tables));
+        // Progress tracking
+        let currentRow = 0;
+        const totalRows = rowsWithParent.length;
+        
+        rowsWithParent.forEach(row => {
+          currentRow++;
+          const itemName = type === "item" ? row.itm_name : row.tsk_name;
+          showProgressIndicator(currentRow, totalRows, itemName);
+          
+          importSingleRow(project, row, type, tables, (name) => {
+            showProgressIndicator(currentRow, totalRows, name);
+          });
+        });
         
         // Uppdatera kalkyler
         calcUtils.updateAllData(project);
@@ -873,6 +1086,9 @@ export function showImportDialog(project, tables, updatePartOptions, applyPartFi
   textarea.style.fontFamily = "monospace";
   textarea.style.fontSize = "12px";
   modal.appendChild(textarea);
+
+  // Setup drag & drop
+  setupDragDrop(textarea, fileInput);
 
   fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
