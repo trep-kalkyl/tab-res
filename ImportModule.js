@@ -41,6 +41,7 @@ export function stripParentIdsAndTotals(data, type) {
     default: return cleaned;
   }
 }
+
 export function regenerateIds(project, data, type, parentId = null) {
   const withNewIds = JSON.parse(JSON.stringify(data));
   function regenerateTaskIds(item) {
@@ -81,6 +82,7 @@ export function regenerateIds(project, data, type, parentId = null) {
     default: return withNewIds;
   }
 }
+
 function getParentOptions(project, type) {
   if (type === "item") {
     return (project.prt_parts || []).map(part => ({ id: part.prt_id, name: part.prt_name, displayName: `${part.prt_name} (ID: ${part.prt_id})` }));
@@ -101,6 +103,7 @@ function showNestedPreview(project, data, type, onContinue) {
   const overlay = document.createElement("div");
   overlay.className = "tab-modal-overlay active";
   overlay.style.zIndex = 99999;
+  
   const modal = document.createElement("div");
   modal.className = "tab-modal-content";
   modal.style.maxWidth = "95%";
@@ -108,10 +111,12 @@ function showNestedPreview(project, data, type, onContinue) {
   modal.style.maxHeight = "95vh";
   modal.style.display = "flex";
   modal.style.flexDirection = "column";
+  
   const title = document.createElement("h3");
   title.className = "tab-modal-title";
   title.textContent = `Steg 1: Förhandsgranska import (nestad vy) - Välj rader att importera`;
   modal.appendChild(title);
+  
   const info = document.createElement("p");
   info.innerHTML = `
     <strong>Välj vilka rader du vill importera:</strong><br>
@@ -123,6 +128,7 @@ function showNestedPreview(project, data, type, onContinue) {
   info.style.marginBottom = "16px";
   info.style.fontSize = "14px";
   modal.appendChild(info);
+  
   const tableContainer = document.createElement("div");
   tableContainer.style.flex = "1";
   tableContainer.style.minHeight = "350px";
@@ -272,15 +278,18 @@ function showNestedPreview(project, data, type, onContinue) {
     } else {
       const partRows = previewTable.getData().filter(r => r._selected);
       partRows.forEach(part => {
-        const partCopy = { ...part };
-        if (Array.isArray(part.prt_items)) {
-          partCopy.prt_items = (part.prt_items || []).filter(i => i._selected);
-          partCopy.prt_items.forEach(item => {
-            if (Array.isArray(item.itm_tasks)) {
-              item.itm_tasks = item.itm_tasks.filter(t => t._selected);
-            }
-          });
-        }
+        // Deep clone av part, items, tasks - FIX FÖR NESTED DATA
+        const partCopy = {
+          ...part,
+          prt_items: (Array.isArray(part.prt_items)
+            ? part.prt_items.filter(i => i._selected).map(item => ({
+                ...item,
+                itm_tasks: Array.isArray(item.itm_tasks)
+                  ? item.itm_tasks.filter(t => t._selected).map(task => ({ ...task }))
+                  : []
+              }))
+            : [])
+        };
         selectedRows.push(partCopy);
       });
     }
