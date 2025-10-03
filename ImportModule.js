@@ -625,23 +625,83 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   setTimeout(() => renderCurrentRow(), 100);
 }
 
+// FÖRBÄTTRAD AJAX-HANTERING FÖR NESTED IMPORT (Lösning 1)
 function importSingleRow(project, data, type, tables) {
   const parentId = data._parentId;
   const withNewIds = regenerateIds(project, data, type, parentId);
+  
   switch(type) {
     case 'part':
     case 'project':
       project.prt_parts.push(withNewIds);
-      ajaxHandler.queuedEchoAjax({ action: "importPart", prt_id: withNewIds.prt_id, prt_name: withNewIds.prt_name });
+      
+      // FÖRBÄTTRAD AJAX: Skicka hela part-strukturen för nested import
+      const ajaxData = {
+        action: "importPart",
+        prt_id: withNewIds.prt_id,
+        prt_name: withNewIds.prt_name,
+        // Lägg till nested data
+        prt_items: withNewIds.prt_items || [],
+        item_count: (withNewIds.prt_items || []).length,
+        task_count: (withNewIds.prt_items || []).reduce((sum, item) => 
+          sum + (item.itm_tasks || []).length, 0)
+      };
+      
+      // Skicka separat AJAX för varje item och task också
+      (withNewIds.prt_items || []).forEach(item => {
+        ajaxHandler.queuedEchoAjax({
+          action: "importItemWithPart",
+          itm_id: item.itm_id,
+          itm_name: item.itm_name,
+          prt_id: withNewIds.prt_id,
+          prt_name: withNewIds.prt_name
+        });
+        
+        (item.itm_tasks || []).forEach(task => {
+          ajaxHandler.queuedEchoAjax({
+            action: "importTaskWithItem",
+            tsk_id: task.tsk_id,
+            tsk_name: task.tsk_name,
+            itm_id: item.itm_id,
+            itm_name: item.itm_name,
+            prt_id: withNewIds.prt_id
+          });
+        });
+      });
+      
+      ajaxHandler.queuedEchoAjax(ajaxData);
       break;
+      
     case 'item':
       const targetPart = project.prt_parts.find(p => p.prt_id === parentId);
       if (!targetPart) { console.error("Target part not found:", parentId); return; }
       if (!targetPart.prt_items) targetPart.prt_items = [];
       targetPart.prt_items.push(withNewIds);
-      ajaxHandler.queuedEchoAjax({ action: "importItem", itm_id: withNewIds.itm_id, itm_name: withNewIds.itm_name, prt_id: targetPart.prt_id });
+      
+      // FÖRBÄTTRAD AJAX: Skicka item med tasks
+      ajaxHandler.queuedEchoAjax({
+        action: "importItem",
+        itm_id: withNewIds.itm_id,
+        itm_name: withNewIds.itm_name,
+        prt_id: targetPart.prt_id,
+        itm_tasks: withNewIds.itm_tasks || [],
+        task_count: (withNewIds.itm_tasks || []).length
+      });
+      
+      // Skicka separat för varje task
+      (withNewIds.itm_tasks || []).forEach(task => {
+        ajaxHandler.queuedEchoAjax({
+          action: "importTaskWithItem", 
+          tsk_id: task.tsk_id,
+          tsk_name: task.tsk_name,
+          itm_id: withNewIds.itm_id,
+          itm_name: withNewIds.itm_name
+        });
+      });
       break;
+      
     case 'task':
+      // Task import förblir oförändrad
       let targetItem = null;
       for (const part of project.prt_parts || []) {
         targetItem = (part.prt_items || []).find(i => i.itm_id === parentId);
@@ -650,7 +710,12 @@ function importSingleRow(project, data, type, tables) {
       if (!targetItem) { console.error("Target item not found:", parentId); return; }
       if (!targetItem.itm_tasks) targetItem.itm_tasks = [];
       targetItem.itm_tasks.push(withNewIds);
-      ajaxHandler.queuedEchoAjax({ action: "importTask", tsk_id: withNewIds.tsk_id, tsk_name: withNewIds.tsk_name, itm_id: targetItem.itm_id });
+      ajaxHandler.queuedEchoAjax({ 
+        action: "importTask", 
+        tsk_id: withNewIds.tsk_id, 
+        tsk_name: withNewIds.tsk_name, 
+        itm_id: targetItem.itm_id 
+      });
       break;
   }
 }
@@ -665,7 +730,36 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
 
     showNestedPreview(project, cleanedData, type, (selectedRows) => {
       if (type === "part" || type === "project") {
-        selectedRows.forEach(row => importSingleRow(project, row, type, tables));
+        // Samla import-statistik
+        let importStats = {
+          action: "importCompleted",
+          type: type,
+          imported_parts: 0,
+          imported_items: 0,
+          imported_tasks: 0,
+          details: []
+        };
+        
+        selectedRows.forEach(row => {
+          importSingleRow(project, row, type, tables);
+          
+          // Räkna statistik
+          importStats.imported_parts++;
+          importStats.imported_items += (row.prt_items || []).length;
+          importStats.imported_tasks += (row.prt_items || []).reduce((sum, item) => 
+            sum + (item.itm_tasks || []).length, 0);
+          
+          importStats.details.push({
+            part_name: row.prt_name,
+            item_count: (row.prt_items || []).length,
+            task_count: (row.prt_items || []).reduce((sum, item) => 
+              sum + (item.itm_tasks || []).length, 0)
+          });
+        });
+        
+        // Skicka sammanfattningsrapport
+        ajaxHandler.queuedEchoAjax(importStats);
+        
         calcUtils.updateAllData(project);
         tables.partTable.setData(project.prt_parts);
         tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
@@ -674,8 +768,23 @@ export function handleImport(project, jsonString, tables, updatePartOptions, app
         alert(`Import slutförd! ${selectedRows.length} ${type}(s) importerade.`);
         return;
       }
+      
+      // Items/Tasks - parent selection
       showParentSelectionTable(project, selectedRows, type, (rowsWithParent) => {
+        let importStats = {
+          action: "importCompleted",
+          type: type,
+          imported_count: rowsWithParent.length,
+          details: rowsWithParent.map(row => ({
+            name: type === "item" ? row.itm_name : row.tsk_name,
+            id: type === "item" ? row.itm_id : row.tsk_id
+          }))
+        };
+        
         rowsWithParent.forEach(row => importSingleRow(project, row, type, tables));
+        
+        ajaxHandler.queuedEchoAjax(importStats);
+        
         calcUtils.updateAllData(project);
         tables.partTable.setData(project.prt_parts);
         tables.itemTable.setData(calcUtils.getAllItemsWithPartRef(project.prt_parts));
