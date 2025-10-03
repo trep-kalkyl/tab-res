@@ -150,42 +150,83 @@ function showNestedPreview(project, data, type, onContinue) {
   else rows = [data];
 
   // Store references to all nested tables for data collection
-  const nestedTables = new Map(); // partId -> { itemsTable: Tabulator, taskTables: Map<itemId, Tabulator> }
+  const nestedTables = new Map(); // For Parts: partId -> { itemsTable, taskTables }
+  const itemTaskTables = new Map(); // For Items: itemId -> taskTable
 
   let previewTable;
+  
+  // TASK COLUMNS (återanvändbar definition)
+  const taskColumns = [
+    { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+    { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
+    { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
+    { title: "Material Amount", field: "tsk_material_amount", editor: "number" },
+    { title: "Stage", field: "tsk_construction_stage", editor: "input" }
+  ];
+
   if (type === "item") {
+    // ITEM IMPORT MED NESTED TASKS
+    const itemColumns = [
+      { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+      { title: "Expand", field: "expand_tasks", formatter: (cell) => "▶", width: 50, hozAlign: "center",
+        cellClick: (e, cell) => {
+          const row = cell.getRow();
+          const holder = row.getElement().querySelector(".subtable-holder");
+          if (!holder) return;
+          holder.style.display = holder.style.display === "block" ? "none" : "block";
+          cell.getElement().textContent = holder.style.display === "block" ? "▼" : "▶";
+        } },
+      { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
+      { title: "Kategori", field: "itm_category", editor: "input" },
+      { title: "Antal", field: "itm_quantity", editor: "number" },
+      { title: "Antal Tasks", field: "itm_tasks_count" }
+    ];
+
     previewTable = new Tabulator(tableContainer, {
-      data: rows.map(i => ({ ...i, _selected: true })),
-      columns: [
-        { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-        { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
-        { title: "Kategori", field: "itm_category", editor: "input" },
-        { title: "Antal", field: "itm_quantity", editor: "number" }
-      ],
+      data: rows.map(i => ({ ...i, _selected: true, itm_tasks_count: (i.itm_tasks || []).length })),
+      columns: itemColumns,
       layout: "fitDataFill",
-      height: "100%"
+      height: "100%",
+      rowFormatter: function(itemRow) {
+        const itemData = itemRow.getData();
+        const itemId = itemData.itm_id;
+        
+        let holder = itemRow.getElement().querySelector(".subtable-holder");
+        if (!holder) {
+          holder = document.createElement("div");
+          holder.className = "subtable-holder";
+          holder.style.display = "none";
+          holder.style.marginLeft = "30px";
+          itemRow.getElement().appendChild(holder);
+
+          // Tasks subtable
+          if (itemData.itm_tasks && itemData.itm_tasks.length > 0) {
+            const tasksTableDiv = document.createElement("div");
+            holder.appendChild(tasksTableDiv);
+            
+            const tasksTable = new Tabulator(tasksTableDiv, {
+              data: itemData.itm_tasks.map(t => ({ ...t, _selected: true })),
+              columns: taskColumns,
+              layout: "fitDataFill",
+              height: "100%",
+            });
+            
+            // Store reference to task table
+            itemTaskTables.set(itemId, tasksTable);
+          }
+        }
+      }
     });
   } else if (type === "task") {
+    // FLAT TASK IMPORT (ingen nesting)
     previewTable = new Tabulator(tableContainer, {
       data: rows.map(t => ({ ...t, _selected: true })),
-      columns: [
-        { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-        { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
-        { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
-        { title: "Material Amount", field: "tsk_material_amount", editor: "number" }
-      ],
+      columns: taskColumns,
       layout: "fitDataFill",
       height: "100%"
     });
   } else {
-    // NESTED: Parts > Items > Tasks
-    const taskColumns = [
-      { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-      { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
-      { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
-      { title: "Material Amount", field: "tsk_material_amount", editor: "number" },
-      { title: "Stage", field: "tsk_construction_stage", editor: "input" }
-    ];
+    // NESTED: Parts > Items > Tasks (oförändrat)
     const itemColumns = [
       { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
       { title: "Expand", field: "expand_tasks", formatter: (cell) => "▶", width: 50, hozAlign: "center",
@@ -296,10 +337,32 @@ function showNestedPreview(project, data, type, onContinue) {
   continueBtn.onclick = () => {
     let selectedRows = [];
     
-    if (type === "item" || type === "task") {
+    if (type === "task") {
+      // FLAT TASK IMPORT
       selectedRows = previewTable.getData().filter(r => r._selected);
+    } else if (type === "item") {
+      // ITEM IMPORT MED NESTED TASKS
+      const itemRows = previewTable.getData().filter(r => r._selected);
+      
+      itemRows.forEach(item => {
+        const itemCopy = { ...item };
+        const itemId = item.itm_id;
+        
+        // Hämta tasks från subtabell om den finns
+        const taskTable = itemTaskTables.get(itemId);
+        if (taskTable) {
+          const tasksData = taskTable.getData();
+          const selectedTasks = tasksData.filter(task => task._selected);
+          itemCopy.itm_tasks = selectedTasks;
+        } else {
+          // Fallback till ursprunglig data om subtabell inte finns
+          itemCopy.itm_tasks = (item.itm_tasks || []).filter(t => t._selected !== false);
+        }
+        
+        selectedRows.push(itemCopy);
+      });
     } else {
-      // NESTED DATA COLLECTION - hämta data från alla subtabeller
+      // NESTED PARTS DATA COLLECTION (oförändrat)
       const partRows = previewTable.getData().filter(r => r._selected);
       
       partRows.forEach(part => {
@@ -347,12 +410,14 @@ function showNestedPreview(project, data, type, onContinue) {
     
     // Debug log
     console.log("Selected rows for import:", selectedRows);
-    selectedRows.forEach(part => {
-      if (part.prt_items) {
-        console.log(`Part ${part.prt_name} has ${part.prt_items.length} items`);
-        part.prt_items.forEach(item => {
+    selectedRows.forEach(row => {
+      if (row.prt_items) {
+        console.log(`Part ${row.prt_name} has ${row.prt_items.length} items`);
+        row.prt_items.forEach(item => {
           console.log(`  Item ${item.itm_name} has ${(item.itm_tasks || []).length} tasks`);
         });
+      } else if (row.itm_tasks) {
+        console.log(`Item ${row.itm_name} has ${row.itm_tasks.length} tasks`);
       }
     });
     
