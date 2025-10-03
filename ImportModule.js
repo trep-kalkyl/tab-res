@@ -133,120 +133,129 @@ function showNestedPreview(project, data, type, onContinue) {
   tableContainer.style.marginBottom = "16px";
   modal.appendChild(tableContainer);
 
-  // Prepare rows (parts)
   let rows = [];
   if (type === 'project' && data.prt_parts) rows = data.prt_parts;
   else if (type === "part" && Array.isArray(data)) rows = data;
   else if (type === "part") rows = [data];
-  else rows = [data]; // fallback single item/task
+  else if (type === "item" && Array.isArray(data)) rows = data;
+  else if (type === "item") rows = [data];
+  else if (type === "task" && Array.isArray(data)) rows = data;
+  else if (type === "task") rows = [data];
+  else rows = [data];
 
-  // Task columns
-  const taskColumns = [
-    { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-    { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
-    { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
-    { title: "Material Amount", field: "tsk_material_amount", editor: "number" },
-    { title: "Stage", field: "tsk_construction_stage", editor: "input" }
-  ];
-  // Item columns
-  const itemColumns = [
-    { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-    { title: "Expand", field: "expand_tasks", formatter: (cell) => "▶", width: 50, hozAlign: "center",
-      cellClick: (e, cell) => {
-        const row = cell.getRow();
-        const holder = row.getElement().querySelector(".subtable-holder");
-        if (!holder) return;
-        holder.style.display = holder.style.display === "block" ? "none" : "block";
-        cell.getElement().textContent = holder.style.display === "block" ? "▼" : "▶";
-      } },
-    { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
-    { title: "Kategori", field: "itm_category", editor: "input" },
-    { title: "Antal", field: "itm_quantity", editor: "number" }
-  ];
-  // Part columns
-  const partColumns = [
-    { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-    { title: "Expand", field: "expand_items", formatter: (cell) => "▶", width: 50, hozAlign: "center",
-      cellClick: (e, cell) => {
-        const row = cell.getRow();
-        const holder = row.getElement().querySelector(".subtable-holder");
-        if (!holder) return;
-        holder.style.display = holder.style.display === "block" ? "none" : "block";
-        cell.getElement().textContent = holder.style.display === "block" ? "▼" : "▶";
-      } },
-    { title: "Part-namn", field: "prt_name", editor: "input", headerFilter: "input" },
-    { title: "Antal Items", field: "prt_items_count" }
-  ];
-
-  // Parts main table
-  const partsTable = new Tabulator(tableContainer, {
-    data: rows.map(p => ({ ...p, _selected: true, prt_items_count: (p.prt_items || []).length })),
-    columns: partColumns,
-    layout: "fitDataFill",
-    height: "100%",
-    rowFormatter: function(partRow) {
-      const partData = partRow.getData();
-      let holder = partRow.getElement().querySelector(".subtable-holder");
-      if (!holder) {
-        holder = document.createElement("div");
-        holder.className = "subtable-holder";
-        holder.style.display = "none";
-        holder.style.marginLeft = "30px";
-        partRow.getElement().appendChild(holder);
-
-        // Items subtable
-        if (partData.prt_items && partData.prt_items.length > 0) {
-          const itemsTableDiv = document.createElement("div");
-          holder.appendChild(itemsTableDiv);
-          const itemsTable = new Tabulator(itemsTableDiv, {
-            data: partData.prt_items.map(i => ({ ...i, _selected: true })),
-            columns: itemColumns,
-            layout: "fitDataFill",
-            height: "100%",
-            rowFormatter: function(itemRow) {
-              const itemData = itemRow.getData();
-              let taskHolder = itemRow.getElement().querySelector(".subtable-holder");
-              if (!taskHolder) {
-                taskHolder = document.createElement("div");
-                taskHolder.className = "subtable-holder";
-                taskHolder.style.display = "none";
-                taskHolder.style.marginLeft = "30px";
-                itemRow.getElement().appendChild(taskHolder);
-                // Tasks subtable
-                if (itemData.itm_tasks && itemData.itm_tasks.length > 0) {
-                  const tasksTableDiv = document.createElement("div");
-                  taskHolder.appendChild(tasksTableDiv);
-                  new Tabulator(tasksTableDiv, {
-                    data: itemData.itm_tasks.map(t => ({ ...t, _selected: true })),
-                    columns: taskColumns,
-                    layout: "fitDataFill",
-                    height: "100%",
-                  });
-                }
-              }
-            }
-          });
-        }
-      }
-    }
-  });
-
-  // For flat Item/Task import (not part/project)
+  let previewTable;
   if (type === "item") {
-    partsTable.setColumns([
-      { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
-      { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
-      { title: "Kategori", field: "itm_category", editor: "input" },
-      { title: "Antal", field: "itm_quantity", editor: "number" }
-    ]);
-  }
-  if (type === "task") {
-    partsTable.setColumns([
+    previewTable = new Tabulator(tableContainer, {
+      data: rows.map(i => ({ ...i, _selected: true })),
+      columns: [
+        { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+        { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
+        { title: "Kategori", field: "itm_category", editor: "input" },
+        { title: "Antal", field: "itm_quantity", editor: "number" }
+      ],
+      layout: "fitDataFill",
+      height: "100%"
+    });
+  } else if (type === "task") {
+    previewTable = new Tabulator(tableContainer, {
+      data: rows.map(t => ({ ...t, _selected: true })),
+      columns: [
+        { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+        { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
+        { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
+        { title: "Material Amount", field: "tsk_material_amount", editor: "number" }
+      ],
+      layout: "fitDataFill",
+      height: "100%"
+    });
+  } else {
+    // NESTED: Parts > Items > Tasks
+    const taskColumns = [
       { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
       { title: "Task-namn", field: "tsk_name", editor: "input", headerFilter: "input" },
       { title: "Quantity", field: "tsk_total_quantity", editor: "number" },
-      { title: "Material Amount", field: "tsk_material_amount", editor: "number" }
-    ]);
+      { title: "Material Amount", field: "tsk_material_amount", editor: "number" },
+      { title: "Stage", field: "tsk_construction_stage", editor: "input" }
+    ];
+    const itemColumns = [
+      { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+      { title: "Expand", field: "expand_tasks", formatter: (cell) => "▶", width: 50, hozAlign: "center",
+        cellClick: (e, cell) => {
+          const row = cell.getRow();
+          const holder = row.getElement().querySelector(".subtable-holder");
+          if (!holder) return;
+          holder.style.display = holder.style.display === "block" ? "none" : "block";
+          cell.getElement().textContent = holder.style.display === "block" ? "▼" : "▶";
+        } },
+      { title: "Item-namn", field: "itm_name", editor: "input", headerFilter: "input" },
+      { title: "Kategori", field: "itm_category", editor: "input" },
+      { title: "Antal", field: "itm_quantity", editor: "number" }
+    ];
+    const partColumns = [
+      { title: "Importera", field: "_selected", formatter: "tickCross", width: 60, hozAlign: "center", editor: true },
+      { title: "Expand", field: "expand_items", formatter: (cell) => "▶", width: 50, hozAlign: "center",
+        cellClick: (e, cell) => {
+          const row = cell.getRow();
+          const holder = row.getElement().querySelector(".subtable-holder");
+          if (!holder) return;
+          holder.style.display = holder.style.display === "block" ? "none" : "block";
+          cell.getElement().textContent = holder.style.display === "block" ? "▼" : "▶";
+        } },
+      { title: "Part-namn", field: "prt_name", editor: "input", headerFilter: "input" },
+      { title: "Antal Items", field: "prt_items_count" }
+    ];
+
+    previewTable = new Tabulator(tableContainer, {
+      data: rows.map(p => ({ ...p, _selected: true, prt_items_count: (p.prt_items || []).length })),
+      columns: partColumns,
+      layout: "fitDataFill",
+      height: "100%",
+      rowFormatter: function(partRow) {
+        const partData = partRow.getData();
+        let holder = partRow.getElement().querySelector(".subtable-holder");
+        if (!holder) {
+          holder = document.createElement("div");
+          holder.className = "subtable-holder";
+          holder.style.display = "none";
+          holder.style.marginLeft = "30px";
+          partRow.getElement().appendChild(holder);
+
+          // Items subtable
+          if (partData.prt_items && partData.prt_items.length > 0) {
+            const itemsTableDiv = document.createElement("div");
+            holder.appendChild(itemsTableDiv);
+            const itemsTable = new Tabulator(itemsTableDiv, {
+              data: partData.prt_items.map(i => ({ ...i, _selected: true })),
+              columns: itemColumns,
+              layout: "fitDataFill",
+              height: "100%",
+              rowFormatter: function(itemRow) {
+                const itemData = itemRow.getData();
+                let taskHolder = itemRow.getElement().querySelector(".subtable-holder");
+                if (!taskHolder) {
+                  taskHolder = document.createElement("div");
+                  taskHolder.className = "subtable-holder";
+                  taskHolder.style.display = "none";
+                  taskHolder.style.marginLeft = "30px";
+                  itemRow.getElement().appendChild(taskHolder);
+                  // Tasks subtable
+                  if (itemData.itm_tasks && itemData.itm_tasks.length > 0) {
+                    const tasksTableDiv = document.createElement("div");
+                    taskHolder.appendChild(tasksTableDiv);
+                    new Tabulator(tasksTableDiv, {
+                      data: itemData.itm_tasks.map(t => ({ ...t, _selected: true })),
+                      columns: taskColumns,
+                      layout: "fitDataFill",
+                      height: "100%",
+                    });
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+    });
   }
 
   // --- Buttons
@@ -257,10 +266,11 @@ function showNestedPreview(project, data, type, onContinue) {
   continueBtn.className = "tab-modal-btn tab-modal-confirm";
   continueBtn.textContent = "Nästa";
   continueBtn.onclick = () => {
-    // Traverse all tables and gather selected rows recursively
     let selectedRows = [];
-    if (type === "part" || type === "project") {
-      const partRows = partsTable.getData().filter(r => r._selected);
+    if (type === "item" || type === "task") {
+      selectedRows = previewTable.getData().filter(r => r._selected);
+    } else {
+      const partRows = previewTable.getData().filter(r => r._selected);
       partRows.forEach(part => {
         const partCopy = { ...part };
         if (Array.isArray(part.prt_items)) {
@@ -273,8 +283,6 @@ function showNestedPreview(project, data, type, onContinue) {
         }
         selectedRows.push(partCopy);
       });
-    } else {
-      selectedRows = partsTable.getData().filter(r => r._selected);
     }
     if (selectedRows.length === 0) {
       alert("Välj minst en rad att importera");
