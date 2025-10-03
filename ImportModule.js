@@ -561,7 +561,7 @@ function showNestedPreview(project, data, type, onContinue) {
   document.body.appendChild(overlay);
 }
 
-/** --- FÖRBÄTTRAD PARENT SELECTION (utan onödig "Nästa"-knapp) --- */
+/** --- FÖRENKLAD PARENT SELECTION (utan navigationsknappar) --- */
 function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const parentOptions = getParentOptions(project, type);
 
@@ -587,7 +587,7 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
   const info = document.createElement("p");
   info.innerHTML = `
     <strong>Välj parent för varje ${type}:</strong><br>
-    • Klicka på en rad för att välja parent<br>
+    • Klicka på en rad för att välja parent och gå till nästa<br>
     • Använd sökfiltret för att hitta rätt parent<br>
     • ${selectedRows.length} st ${type}s kommer att importeras
   `;
@@ -713,50 +713,16 @@ function showParentSelectionTable(project, selectedRows, type, onConfirm) {
       : `Slutför Import (${completedCount}/${selectedRows.length})`;
   }
 
-  // Navigation buttons (simplified - no confusing "Nästa")
-  const navRow = document.createElement("div");
-  navRow.style.display = "flex";
-  navRow.style.justifyContent = "space-between";
-  navRow.style.marginBottom = "16px";
-  
-  const prevBtn = document.createElement("button");
-  prevBtn.className = "tab-modal-btn";
-  prevBtn.textContent = "← Föregående";
-  prevBtn.disabled = true;
-  prevBtn.onclick = () => {
-    if (currentRowIndex > 0) {
-      currentRowIndex--;
-      renderCurrentRow();
-      prevBtn.disabled = currentRowIndex === 0;
-    }
-  };
-  navRow.appendChild(prevBtn);
-  
-  // Progress info
+  // Progress display (informational only, no navigation buttons)
   const progressInfo = document.createElement("div");
-  progressInfo.style.display = "flex";
-  progressInfo.style.alignItems = "center";
+  progressInfo.style.textAlign = "center";
   progressInfo.style.fontSize = "14px";
   progressInfo.style.color = "#666";
-  progressInfo.textContent = "Klicka på en parent-rad för att välja";
-  navRow.appendChild(progressInfo);
-  
-  const skipBtn = document.createElement("button");
-  skipBtn.className = "tab-modal-btn";
-  skipBtn.textContent = "Hoppa över →";
-  skipBtn.style.background = "#ffc107";
-  skipBtn.onclick = () => {
-    if (currentRowIndex < selectedRows.length - 1) {
-      currentRowIndex++;
-      renderCurrentRow();
-      prevBtn.disabled = false;
-    }
-  };
-  navRow.appendChild(skipBtn);
-  
-  modal.appendChild(navRow);
+  progressInfo.style.marginBottom = "16px";
+  progressInfo.textContent = "Klicka på en parent-rad för att välja och gå vidare automatiskt";
+  modal.appendChild(progressInfo);
 
-  // Finish button
+  // Finish button only
   const btnRow = document.createElement("div");
   btnRow.className = "tab-modal-buttons";
   const finishBtn = document.createElement("button");
